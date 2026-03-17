@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Entorno virtual
+venv/
+env/
+.venv/
+.env
+
+# Datos generados en runtime (NO versionar)
+data/images/
+data/*.db
+data/calibration.json
+data/models/
+
+# Logs
+app.log
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribución
+*.exe
+*.dmg

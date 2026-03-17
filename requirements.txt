@@ -1,0 +1,17 @@
+# VisiSize Python v1 — Dependencias
+# Instalar con: pip install -r requirements.txt
+
+# Visión por computador
+opencv-python==4.9.0.80
+
+# Interfaz gráfica
+PyQt6==6.7.1
+
+# Clasificador IA (YOLOv8 — módulo preparado, modelo pendiente de entrenamiento)
+ultralytics==8.2.0
+
+# Procesamiento de imágenes
+Pillow==10.3.0
+
+# Cómputo numérico (requerido por OpenCV y ultralytics)
+numpy==1.26.4
