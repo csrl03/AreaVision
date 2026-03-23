@@ -19,6 +19,30 @@ from core.constants import (
     MIN_CALIBRATION_PIXELS,
 )
 
+# ── Umbrales activos en memoria ───────────────────────────────────────────────
+# Se inicializan con los valores de constants.py y pueden actualizarse en tiempo
+# de ejecución mediante set_category_thresholds() sin reiniciar la app.
+_active_thresholds: dict[str, tuple[float, float]] = {
+    k: (float(v[0]), float(v[1])) for k, v in CATEGORY_THRESHOLDS.items()
+}
+
+
+def set_category_thresholds(thresholds: dict[str, list]) -> None:
+    """
+    Actualiza los umbrales de clasificación en memoria.
+
+    Args:
+        thresholds: Diccionario con claves "A", "B", "C", "D" y valores [min, max].
+                    El rango "error" se deriva automáticamente como (D_max, ∞).
+    """
+    global _active_thresholds
+    new: dict[str, tuple[float, float]] = {}
+    for cat in ("A", "B", "C", "D"):
+        lo, hi = thresholds[cat]
+        new[cat] = (float(lo), float(hi))
+    new["error"] = (float(new["D"][1]), float("inf"))
+    _active_thresholds = new
+
 
 def compute_factor_k(known_area_m2: float, area_pixels: float) -> float:
     """
@@ -86,10 +110,9 @@ def pixels_to_m2(area_pixels: float, factor_k: float) -> float:
 def classify_area(area_m2: float) -> MeasurementCategory:
     """
     Asigna categoría A/B/C/D/error según el área en m².
-    Itera en el orden definido en CATEGORY_THRESHOLDS;
-    la primera ventana que contenga el valor gana.
+    Usa los umbrales activos configurados por el usuario (o defaults si no se han modificado).
     """
-    for cat_name, (min_val, max_val) in CATEGORY_THRESHOLDS.items():
+    for cat_name, (min_val, max_val) in _active_thresholds.items():
         if min_val <= area_m2 < max_val:
             return MeasurementCategory(cat_name)
     return MeasurementCategory.ERROR
@@ -100,7 +123,10 @@ def is_at_category_boundary(area_m2: float) -> bool:
     Retorna True si el área está dentro del ±5% de un límite de categoría.
     Indica que un pequeño error de medición podría cambiar la categoría.
     """
-    boundaries = [1.0, 2.0, 3.0, 4.0]
+    # Extraer los límites superiores de los umbrales activos (excluye ∞)
+    boundaries = [
+        hi for _, hi in _active_thresholds.values() if hi != float("inf")
+    ]
     for boundary in boundaries:
         if boundary > 0 and abs(area_m2 - boundary) / boundary <= CATEGORY_BOUNDARY_TOLERANCE:
             return True

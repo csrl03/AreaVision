@@ -1,12 +1,15 @@
 """
 Pipeline de procesamiento de imagen con OpenCV.
 
-Pipeline idéntico al de la app Flutter (opencv_dart):
-    BGR → Grayscale → GaussianBlur → AdaptiveThreshold → Morfología
-    → FindContours → LargestContour → Área + Métricas + Overlay visual
+Pipeline:
+    BGR → Grayscale → GaussianBlur → AdaptiveThreshold
+    → MORPH_OPEN (elimina líneas finas/ruido)
+    → MORPH_CLOSE (rellena huecos)
+    → FindContours → Filtrado (área + solidez) → Contorno más grande
+    → Área + Métricas + Overlay visual
 
-El overlay en tiempo real colorea el contorno y dibuja el bounding box,
-lo que permite al usuario ver qué está siendo detectado en cada frame.
+La sensibilidad de detección y el área mínima en píxeles son
+configurables en tiempo de ejecución mediante update_config().
 """
 from __future__ import annotations
 
@@ -24,6 +27,8 @@ from core.constants import (
     ADAPTIVE_C,
     MIN_CONTOUR_AREA_RATIO,
     MAX_CONTOUR_AREA_RATIO,
+    MIN_CONTOUR_AREA_PIXELS,
+    CONTOUR_SOLIDITY_THRESHOLD,
 )
 from core.entities import ProcessingResult, MeasurementCategory
 from core.exceptions import ProcessingError
@@ -36,7 +41,47 @@ class OpenCVService:
     """
     Procesa un frame BGR y retorna las métricas del contorno más grande
     junto con imágenes intermedias para visualización paso a paso.
+
+    La configuración de detección es mutable en tiempo de ejecución
+    mediante update_config(), sin necesidad de reiniciar la app.
     """
+
+    def __init__(self) -> None:
+        # Configuración de detección — se puede actualizar con update_config()
+        self._adaptive_c: int = ADAPTIVE_C
+        self._block_size: int = ADAPTIVE_BLOCK_SIZE
+        self._min_pixels: int = MIN_CONTOUR_AREA_PIXELS
+        self._solidity_threshold: float = CONTOUR_SOLIDITY_THRESHOLD
+
+    def update_config(
+        self,
+        min_pixels: int | None = None,
+        adaptive_c: int | None = None,
+        block_size: int | None = None,
+        solidity_threshold: float | None = None,
+    ) -> None:
+        """
+        Actualiza la configuración de detección en caliente.
+
+        Args:
+            min_pixels:         Área mínima absoluta de contorno en píxeles cuadrados (≥ 1).
+            adaptive_c:         Constante de umbralización adaptativa (mayor → menos sensible).
+            block_size:         Tamaño de vecindario adaptativo (debe ser impar, ≥ 3).
+            solidity_threshold: Solidez mínima área/convexHull (0–1). Descarta sombras lineales.
+        """
+        if min_pixels is not None:
+            self._min_pixels = max(1, int(min_pixels))
+        if adaptive_c is not None:
+            self._adaptive_c = int(adaptive_c)
+        if block_size is not None:
+            bs = int(block_size)
+            self._block_size = bs if bs % 2 == 1 else bs + 1  # garantiza impar
+        if solidity_threshold is not None:
+            self._solidity_threshold = float(solidity_threshold)
+        logger.debug(
+            "OpenCVService config actualizada: min_px=%d adaptive_c=%d block=%d solidity=%.2f",
+            self._min_pixels, self._adaptive_c, self._block_size, self._solidity_threshold,
+        )
 
     def process_frame(
         self,
@@ -60,7 +105,8 @@ class OpenCVService:
         t_start = time.perf_counter()
         h, w = frame.shape[:2]
         total_area = w * h
-        min_area = total_area * MIN_CONTOUR_AREA_RATIO
+        # Umbral combinado: usa el mayor entre el ratio relativo y el mínimo absoluto
+        min_area = max(total_area * MIN_CONTOUR_AREA_RATIO, float(self._min_pixels))
         max_area = total_area * MAX_CONTOUR_AREA_RATIO
 
         try:
@@ -74,27 +120,40 @@ class OpenCVService:
                 GAUSSIAN_SIGMA,
             )
 
-            # ── 3. Umbralización adaptativa (idéntico a la app Flutter) ──────
+            # ── 3. Umbralización adaptativa ───────────────────────────────────
             binary = cv2.adaptiveThreshold(
                 blurred,
                 255,
                 cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                 cv2.THRESH_BINARY_INV,
-                ADAPTIVE_BLOCK_SIZE,
-                ADAPTIVE_C,
+                self._block_size,
+                self._adaptive_c,
             )
 
-            # ── 4. Morfología — cierra huecos pequeños en el objeto ───────────
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            binary_clean = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+            # ── 4. MORPH_OPEN — elimina líneas finas, sombras y ruido puntual ─
+            kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            binary_opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_open)
 
-            # ── 5. Buscar contornos externos ──────────────────────────────────
+            # ── 5. MORPH_CLOSE — rellena huecos pequeños dentro del objeto ─────
+            kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            binary_clean = cv2.morphologyEx(binary_opened, cv2.MORPH_CLOSE, kernel_close)
+
+            # ── 6. Buscar contornos externos ──────────────────────────────────
             contours, _ = cv2.findContours(
                 binary_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
 
-            # ── 6. Filtrar por área mínima y máxima ───────────────────────────
-            valid = [c for c in contours if min_area < cv2.contourArea(c) < max_area]
+            # ── 7. Filtrar por área (absoluta + relativa) y solidez ───────────
+            def _solidity(c: np.ndarray) -> float:
+                """Razón área_contorno / área_cierre_convexo (0–1)."""
+                hull_area = cv2.contourArea(cv2.convexHull(c))
+                return cv2.contourArea(c) / hull_area if hull_area > 0 else 0.0
+
+            valid = [
+                c for c in contours
+                if min_area < cv2.contourArea(c) < max_area
+                and _solidity(c) >= self._solidity_threshold
+            ]
 
             # Imágenes intermedias para el panel de visualización
             gray_bgr   = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
@@ -124,7 +183,7 @@ class OpenCVService:
                     error_message="No se detectó ningún contorno válido.",
                 )
 
-            # ── 7. Seleccionar el contorno más grande (igual que Flutter) ─────
+            # ── 8. Seleccionar el contorno más grande ─────────────────────────
             largest = max(valid, key=cv2.contourArea)
             area_px     = cv2.contourArea(largest)
             perimeter   = cv2.arcLength(largest, True)
@@ -132,7 +191,7 @@ class OpenCVService:
             x, y, bw, bh = cv2.boundingRect(largest)
             aspect_ratio = bw / bh if bh > 0 else 0.0
 
-            # ── 8. Generar imagen de overlay ──────────────────────────────────
+            # ── 9. Generar imagen de overlay ──────────────────────────────────
             contours_img = frame.copy()
             if draw_overlay:
                 # Color del contorno según categoría (igual que la app Flutter)

@@ -1,0 +1,1454 @@
+﻿% ============================================================
+%  VisiSize — Documentación Técnica Detallada
+%  Flujograma y descripción de procesos
+%  Fecha: Marzo 2026
+% ============================================================
+\documentclass[12pt, a4paper]{article}
+
+% ── Codificación y lenguaje ─────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+
+% ── Tipografía y espaciado ──────────────────────────────────
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Márgenes ────────────────────────────────────────────────
+\usepackage[top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm]{geometry}
+
+% ── Gráficos y colores ──────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit,
+                backgrounds, shadows, calc, decorations.pathreplacing}
+\usepackage{xcolor}
+\usepackage{graphicx}
+
+% ── Tablas ──────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+
+% ── Matemáticas ─────────────────────────────────────────────
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% ── Código fuente ────────────────────────────────────────────
+\usepackage{listings}
+\usepackage{courier}
+
+% ── Citaciones IEEE ──────────────────────────────────────────
+\usepackage{cite}
+\usepackage{url}
+
+% ── Cajas y destacados ───────────────────────────────────────
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable, listingsutf8}
+
+% ── Encabezados y pies de página ─────────────────────────────
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small VisiSize — Documentación Técnica}
+\fancyhead[R]{\small Marzo 2026}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Hipervínculos ────────────────────────────────────────────
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!70!black,
+    citecolor=green!50!black,
+    pdfauthor={JRapp — UDC 2026-1},
+    pdftitle={VisiSize: Documentación Técnica y Flujogramas},
+    pdfsubject={Medición de área por visión artificial},
+}
+
+% ── Títulos de sección ───────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\section}[block]
+  {\Large\bfseries\color{blue!60!black}}{\thesection.}{0.8em}{}[\vspace{-0.3em}\hrule\vspace{0.3em}]
+\titleformat{\subsection}[block]
+  {\large\bfseries\color{blue!40!black}}{\thesubsection.}{0.6em}{}
+\titleformat{\subsubsection}[block]
+  {\normalsize\bfseries\color{gray!70!black}}{\thesubsubsection.}{0.5em}{}
+
+% ── Paleta de colores del proyecto ───────────────────────────
+\definecolor{visiblu}{RGB}{25, 90, 170}
+\definecolor{visigray}{RGB}{80, 90, 100}
+\definecolor{catA}{RGB}{76, 175, 80}      % verde
+\definecolor{catB}{RGB}{33, 150, 243}     % azul
+\definecolor{catC}{RGB}{255, 152, 0}      % ámbar
+\definecolor{catD}{RGB}{255, 87, 34}      % naranja
+\definecolor{catErr}{RGB}{244, 67, 54}    % rojo
+\definecolor{pipebg}{RGB}{240, 248, 255}
+\definecolor{pipeborder}{RGB}{25, 90, 170}
+\definecolor{notecolor}{RGB}{255, 248, 220}
+\definecolor{noteborder}{RGB}{204, 153, 0}
+\definecolor{codebg}{RGB}{245, 245, 245}
+\definecolor{catE}{RGB}{156, 39, 176}     % morado — Zona E
+\definecolor{catOut}{RGB}{244, 67, 54}    % rojo   — Fuera de rango
+
+% ── Caja informativa ─────────────────────────────────────────
+\newtcolorbox{infobox}[1][]{
+  enhanced, breakable,
+  colback=pipebg, colframe=pipeborder,
+  fonttitle=\bfseries\color{white},
+  coltitle=white, attach boxed title to top left={yshift=-2mm, xshift=4mm},
+  boxed title style={colback=visiblu, rounded corners},
+  rounded corners, #1
+}
+
+\newtcolorbox{notebox}[1][]{
+  enhanced, breakable,
+  colback=notecolor, colframe=noteborder,
+  fonttitle=\bfseries, #1
+}
+
+\newtcolorbox{formulabox}[1][]{
+  enhanced,
+  colback=blue!4!white, colframe=visiblu,
+  fonttitle=\bfseries\color{visiblu},
+  attach boxed title to top left={yshift=-2mm, xshift=5mm},
+  boxed title style={colback=blue!15!white, colframe=visiblu},
+  rounded corners, #1
+}
+
+% ── Estilo de código ─────────────────────────────────────────
+\lstdefinestyle{pycode}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\footnotesize\ttfamily,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{red!60!black},
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray!40},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  stepnumber=1,
+  language=Python,
+  showstringspaces=false,
+}
+
+% ── TikZ: estilos de cajas para flujograma ──────────────────
+\tikzset{
+  startstop/.style={
+    rectangle, rounded corners=8pt, minimum width=3.5cm, minimum height=0.9cm,
+    draw=visiblu!80, fill=visiblu!20, text centered, font=\small\bfseries,
+    drop shadow
+  },
+  process/.style={
+    rectangle, minimum width=4.5cm, minimum height=0.85cm,
+    draw=blue!50!black, fill=blue!8, text centered, font=\small,
+    drop shadow
+  },
+  decision/.style={
+    diamond, aspect=2.5, minimum width=4cm, minimum height=0.8cm,
+    draw=orange!80!black, fill=orange!15, text centered, font=\small,
+    inner sep=1pt, drop shadow
+  },
+  io/.style={
+    trapezium, trapezium left angle=70, trapezium right angle=110,
+    minimum width=3.8cm, minimum height=0.8cm,
+    draw=green!60!black, fill=green!10, text centered, font=\small,
+    drop shadow
+  },
+  storage/.style={
+    cylinder, shape border rotate=90, aspect=0.15,
+    minimum height=1cm, minimum width=2.8cm,
+    draw=purple!60!black, fill=purple!10, text centered, font=\small,
+    drop shadow
+  },
+  arrow/.style={-Stealth, thick, color=visigray},
+  warrow/.style={-Stealth, thick, color=orange!70!black, dashed},
+}
+
+% ============================================================
+\begin{document}
+% ============================================================
+
+% ── Portada ─────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{1.5cm}
+
+  {\Huge\bfseries\color{visiblu} VisiSize}\\[0.4cm]
+  {\large\color{visigray} Sistema de Medición de Área por Visión Artificial}\\[1.5cm]
+
+  \begin{tikzpicture}
+    \draw[visiblu, line width=3pt, rounded corners=12pt]
+      (0,0) rectangle (12,3);
+    \fill[visiblu!10, rounded corners=12pt]
+      (0.1,0.1) rectangle (11.9,2.9);
+    \node[text width=11.5cm, align=center] at (6,1.5) {%
+      \large\color{visigray}%
+      Documentación técnica detallada de arquitectura,\\
+      flujogramas y algoritmos del sistema de clasificación\\
+      de retales metálicos en \textbf{ServiMetales de Colombia S.A.S.}
+    };
+  \end{tikzpicture}
+
+  \vspace{1.5cm}
+  {\large\bfseries Documentación Técnica y Pedagógica}\\[0.5cm]
+  {\normalsize Versión 1.0.0}\\[2cm]
+
+  \begin{tabular}{rl}
+    \textbf{Cliente:}    & ServiMetales de Colombia S.A.S. \\[0.3cm]
+    \textbf{Proyecto:}   & JRapp --- AreaCamPython\_v1 \\[0.3cm]
+    \textbf{Versión:}    & Prototipo v1.0 \\[0.3cm]
+    \textbf{Semestre:}   & UDC 2026-1 \\[0.3cm]
+    \textbf{Tecnologías:} & Python 3 $\cdot$ OpenCV $\cdot$ SQLite $\cdot$ CustomTkinter \\[0.3cm]
+    \textbf{Fecha:}      & Marzo 2026 \\
+  \end{tabular}
+
+  \vfill
+  {\small\color{gray} Este documento describe el funcionamiento interno
+  del sistema VisiSize de manera detallada, incluyendo flujogramas,\\
+  fórmulas matemáticas y explicaciones paso a paso de cada proceso.}
+\end{titlepage}
+
+% ── Tabla de contenidos ──────────────────────────────────────
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Introducción: ¿Qué es VisiSize?}
+% ============================================================
+
+\begin{infobox}[title={Concepto Central --- ServiMetales de Colombia S.A.S.}]
+\textbf{VisiSize} (prototipo v1.0) es una aplicación de escritorio que utiliza
+visión artificial para \textbf{medir el área real} de retales metálicos
+resultantes del proceso de corte y manufactura en \textbf{ServiMetales de Colombia S.A.S.},
+expresando dicha área en metros cuadrados ($\text{m}^2$) y asignando automáticamente
+una \textbf{zona de almacenamiento} dentro de la planta industrial, todo sin contacto
+físico con la pieza \cite{malamas2003}.
+\end{infobox}
+
+\vspace{0.5cm}
+
+En el sector metalmecánico, los procesos de corte de láminas, perfiles y tubos de acero
+generan \textbf{retales metálicos} de diversas dimensiones que deben gestionarse
+eficientemente para su reutilización o disposición final. VisiSize automatiza la
+inspección visual de estos retales: la cámara apunta a la pieza, el algoritmo detecta
+su contorno, calcula su área y la asigna digitalmente a la zona correspondiente \cite{chin1982}.
+
+\subsection{¿Cómo lo logra? --- La idea básica}
+
+El proceso tiene tres ingredientes fundamentales:
+
+\begin{enumerate}
+  \item \textbf{Ver:} La cámara captura imágenes en tiempo real (30 fotogramas por segundo).
+  \item \textbf{Detectar:} Un algoritmo de procesamiento de imagen identifica el contorno del objeto.
+  \item \textbf{Medir:} Usando un factor de conversión previamente calculado (la \emph{calibración}),
+        convierte el área en píxeles a área en metros cuadrados.
+\end{enumerate}
+
+\begin{notebox}[title={Nota}]
+Un \textbf{píxel} es el punto más pequeño que forma una imagen digital.
+Si tienes una imagen de 1280×720 píxeles, tiene 921\,600 píxeles en total.
+El reto del sistema es saber cuántos metros reales corresponde a cada píxel.
+\end{notebox}
+
+\subsection{Arquitectura general del sistema}
+
+El proyecto está organizado en capas bien definidas (arquitectura limpia):
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.4cm]
+  \node[draw=visiblu, fill=visiblu!10, rounded corners=6pt,
+        minimum width=10cm, minimum height=0.7cm, font=\small\bfseries]
+        (ui) {\texttt{ui/} — Interfaz de usuario (CustomTkinter)};
+  \node[draw=blue!60, fill=blue!8, rounded corners=6pt,
+        minimum width=10cm, minimum height=0.7cm, font=\small\bfseries,
+        below=of ui]
+        (svc) {\texttt{services/} — Lógica de negocio y orquestación};
+  \node[draw=green!50!black, fill=green!8, rounded corners=6pt,
+        minimum width=10cm, minimum height=0.7cm, font=\small\bfseries,
+        below=of svc]
+        (core) {\texttt{core/} — Fórmulas, entidades y constantes puras};
+  \node[draw=purple!60, fill=purple!8, rounded corners=6pt,
+        minimum width=10cm, minimum height=0.7cm, font=\small\bfseries,
+        below=of core]
+        (data) {\texttt{data/} — Base de datos SQLite y archivos JSON};
+
+  \draw[arrow] (ui) -- (svc);
+  \draw[arrow] (svc) -- (core);
+  \draw[arrow] (svc) -- (data);
+
+  \node[right=0.5cm of ui, font=\scriptsize\color{gray}] {Ventanas, widgets, tema visual};
+  \node[right=0.5cm of svc, font=\scriptsize\color{gray}] {Cámara, calibración, medición, OpenCV};
+  \node[right=0.5cm of core, font=\scriptsize\color{gray}] {FactorK, categorías, validaciones};
+  \node[right=0.5cm of data, font=\scriptsize\color{gray}] {Mediciones, calibración, imágenes};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.3cm}
+La dirección de las flechas indica la dependencia: la UI depende de los servicios,
+los servicios dependen del núcleo y de los datos, pero \textbf{el núcleo no sabe nada
+de la UI ni de la base de datos} --- esto hace el código más mantenible y testeable.
+
+\subsection{Contexto industrial: ServiMetales de Colombia S.A.S.}
+
+ServiMetales de Colombia S.A.S. es una empresa del sector metalmecánico dedicada al
+procesamiento, corte y distribución de aceros. Sus procesos productivos generan
+\textbf{retales metálicos} --- fragmentos de láminas, tubos, perfiles estructurales y placas
+--- que deben gestionarse sistemáticamente para maximizar su reutilización y minimizar
+los residuos industriales \cite{malamas2003, chin1982}.
+
+Los objetivos del sistema en esta versión prototipo son:
+
+\begin{itemize}
+  \item \textbf{Medir} autonomáticamente el área de retales con visión artificial \cite{gonzalez2018}.
+  \item \textbf{Clasificar} cada pieza en una de cinco zonas de almacenamiento (A--E)
+        según su área calculada.
+  \item \textbf{Inventariar} el material potencialmente reutilizable en una base de datos SQLite \cite{owens2010}.
+  \item \textbf{Sentar las bases} para un gemelo digital del layout de planta en versiones futuras \cite{tao2018}.
+\end{itemize}
+
+\begin{infobox}[title={Definición operacional: Fuera de Rango (FdR)}]
+En el prototipo v1.0, una pieza se considera \textbf{fuera de rango} en dos situaciones:
+\begin{itemize}
+  \item \textbf{Demasiado peque\~na:} área real $< 0{,}0025\,\text{m}^2$
+        (equivalente a $5\,\text{cm} \times 5\,\text{cm}$). La pieza no es
+        procesable o almacenable de forma individual.
+  \item \textbf{Demasiado grande:} la pieza excede el \textbf{campo de visión
+        completo de la cámara} (su proyección ocupa más del 95\,\% del fotograma).
+        Su contorno no puede delimitarse con precisión.
+\end{itemize}
+Las piezas FdR se se\~nalizan en \textcolor{catOut}{\textbf{rojo}} en la interfaz
+y \textbf{no se asignan a ninguna zona de almacenamiento}.
+\end{infobox}
+
+\subsubsection*{Zonas de almacenamiento --- Prototipo v1.0}
+
+El sistema define cinco zonas ordenadas alfabéticamente. En esta versión, la
+asignación se basa exclusivamente en el área calculada. A futuro, el área
+será un parámetro más junto con el tipo de pieza detectado por el clasificador
+YOLO (lámina, tubo, perfil, placa) \cite{li2020, tao2018}.
+
+\vspace{0.3cm}
+\begin{center}
+\begin{tabular}{p{1.1cm} p{2.8cm} p{3.8cm} p{2.5cm} p{1.8cm}}
+\toprule
+\textbf{Zona} & \textbf{Descripción} & \textbf{Rango de área (v1.0)} & \textbf{Color digital} & \textbf{Código hex} \\
+\midrule
+\textbf{A} & Primera zona & $[0{,}0025 - 1{,}0)\,\text{m}^2$ &
+  \textcolor{catA}{\rule{1.2cm}{0.25cm}} Verde & \texttt{\#4caf50} \\[3pt]
+\textbf{B} & Segunda zona & $[1{,}0 - 2{,}0)\,\text{m}^2$ &
+  \textcolor{catB}{\rule{1.2cm}{0.25cm}} Azul & \texttt{\#2196f3} \\[3pt]
+\textbf{C} & Tercera zona & $[2{,}0 - 3{,}0)\,\text{m}^2$ &
+  \textcolor{catC}{\rule{1.2cm}{0.25cm}} Ámbar & \texttt{\#ff9800} \\[3pt]
+\textbf{D} & Cuarta zona & $[3{,}0 - 4{,}0)\,\text{m}^2$ &
+  \textcolor{catD}{\rule{1.2cm}{0.25cm}} Naranja & \texttt{\#ff5722} \\[3pt]
+\textbf{E} & Quinta zona & $\geq 4{,}0\,\text{m}^2$ (cabe en frame) &
+  \textcolor{catE}{\rule{1.2cm}{0.25cm}} Morado & \texttt{\#9c27b0} \\
+\midrule
+\textbf{FdR} & Fuera de rango & $< 0{,}0025\,\text{m}^2$ \textit{ó} excede FOV &
+  \textcolor{catOut}{\rule{1.2cm}{0.25cm}} Rojo & \texttt{\#f44336} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{notebox}[title={Evolución futura de la clasificación}]
+En versiones posteriores, el módulo YOLO identificará el tipo de pieza metálica
+(lámina, tubo, perfil L/C/H, placa). La asignación de zona incorporará el tipo,
+la geometría (circularidad, relación de aspecto) y el área como parámetros de
+decisión conjuntos, habilitando el gemelo digital del layout \cite{tao2018, jocher2023}.
+\end{notebox}
+
+% ============================================================
+\section{Flujograma General del Sistema}
+% ============================================================
+
+El siguiente diagrama muestra el flujo completo de vida de una medición,
+desde que el usuario abre la aplicación hasta que el dato queda guardado.
+
+\vspace{0.8cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.6cm and 1.5cm]
+
+  % Nodos
+  \node[startstop] (inicio) {INICIO};
+
+  \node[process, below=of inicio]
+    (config) {Cargar configuración\\(\texttt{config.py})};
+
+  \node[process, below=of config]
+    (calibcheck) {Verificar calibración\\(\texttt{calibration.json})};
+
+  \node[decision, below=of calibcheck]
+    (calexists) {¿Calibración\\válida?};
+
+  \node[io, right=2.5cm of calexists]
+    (calwiz) {Asistente de\\calibración (3 pasos)};
+
+  \node[process, below=of calexists]
+    (camstart) {Inicializar cámara\\(\texttt{CameraService})};
+
+  \node[decision, below=of camstart]
+    (camok) {¿Cámara\\disponible?};
+
+  \node[io, right=2.5cm of camok]
+    (camerr) {Mostrar error\\y retry};
+
+  \node[process, below=of camok]
+    (pipeline) {Ejecutar pipeline de\\imagen por frame\\(\texttt{OpenCVService})};
+
+  \node[decision, below=of pipeline]
+    (objdet) {¿Objeto\\detectado?};
+
+  \node[io, left=2.5cm of objdet]
+    (noobj) {Mostrar mensaje\\«sin objeto»};
+
+  \node[process, below=of objdet]
+    (calcarea) {Calcular área real\\con FactorK corregido};
+
+  \node[process, below=of calcarea]
+    (classify) {Verificar rango y asignar\\zona A/B/C/D/E o FdR};
+
+  \node[process, below=of classify]
+    (overlay) {Mostrar resultado en\\tiempo real (overlay)};
+
+  \node[decision, below=of overlay]
+    (capture) {¿Usuario presiona\\«Capturar»?};
+
+  \node[process, below=of capture]
+    (save) {Guardar medición\\en SQLite + PNG};
+
+  \node[startstop, below=of save]
+    (fin) {FIN del ciclo\\(vuelve al loop)};
+
+  % Flechas principales
+  \draw[arrow] (inicio) -- (config);
+  \draw[arrow] (config) -- (calibcheck);
+  \draw[arrow] (calibcheck) -- (calexists);
+  \draw[arrow] (calexists) -- node[left, font=\scriptsize]{Sí} (camstart);
+  \draw[arrow] (calexists) -- node[above, font=\scriptsize]{No} (calwiz);
+  \draw[arrow] (calwiz) |- (camstart);
+  \draw[arrow] (camstart) -- (camok);
+  \draw[arrow] (camok) -- node[left, font=\scriptsize]{Sí} (pipeline);
+  \draw[arrow] (camok) -- node[above, font=\scriptsize]{No} (camerr);
+  \draw[arrow] (camerr) |- (camstart);
+  \draw[arrow] (pipeline) -- (objdet);
+  \draw[arrow] (objdet) -- node[left, font=\scriptsize]{Sí} (calcarea);
+  \draw[arrow] (objdet) -- node[above, font=\scriptsize]{No} (noobj);
+  \draw[arrow] (noobj) |- (pipeline);
+  \draw[arrow] (calcarea) -- (classify);
+  \draw[arrow] (classify) -- (overlay);
+  \draw[arrow] (overlay) -- (capture);
+  \draw[arrow] (capture) -- node[left, font=\scriptsize]{Sí} (save);
+  \draw[arrow] (save) -- (fin);
+  \draw[warrow] (capture.east) -- ++(1.8,0) |- node[right, font=\scriptsize]{No} (pipeline.east);
+
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Proceso 1: Inicialización del Sistema}
+% ============================================================
+
+Cuando el usuario ejecuta \texttt{main.py}, la aplicación realiza una serie de
+pasos de preparación antes de mostrar la interfaz:
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm]
+  \node[startstop] (s) {\texttt{main.py} ejecutado};
+  \node[process, below=of s] (log) {Configurar sistema de logging\\(\texttt{app.log})};
+  \node[process, below=of log] (dirs) {Crear directorios si no existen\\(\texttt{data/}, \texttt{data/images/})};
+  \node[process, below=of dirs] (db) {Inicializar base de datos SQLite\\(\texttt{measurements.db})};
+  \node[process, below=of db] (ui) {Instanciar ventana principal\\(\texttt{MainWindow})};
+  \node[process, below=of ui] (loop) {Iniciar bucle de eventos Tkinter};
+
+  \draw[arrow] (s)--(log)--(dirs)--(db)--(ui)--(loop);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.4cm}
+\begin{infobox}[title=¿Qué es el sistema de logging?]
+El \textbf{logging} es como un diario de actividades del programa. Cada vez que algo
+importante sucede (un error, una calibración exitosa, una medición guardada), queda
+registrado con fecha y hora en el archivo \texttt{app.log}. Esto permite diagnosticar
+problemas sin necesidad de tener el programa abierto.
+\end{infobox}
+
+% ============================================================
+\section{Proceso 2: Calibración — El Puente entre Píxeles y Metros}
+% ============================================================
+
+La calibración es el proceso más crítico del sistema.
+\textbf{Sin calibración no hay medición válida.}
+
+\subsection{¿Por qué es necesaria?}
+
+Piensa en esto: si pones una hoja A4 a 50 cm de la cámara, ocupa, digamos, 120.000 píxeles.
+Pero si la alejas a 100 cm, esa \textit{misma} hoja ahora solo ocupa 30.000 píxeles.
+El área real no cambió, pero la imagen sí. La calibración resuelve este problema al establecer
+una relación matemática entre píxeles y metros para una distancia específica.
+
+\subsection{El Factor de Conversión (FactorK)}
+
+\begin{formulabox}[title=Fórmula del FactorK]
+\vspace{0.3cm}
+$$\text{FactorK} = \frac{\text{Área real conocida}\ (\text{m}^2)}{\text{Área medida en píxeles}\ (\text{px}^2)}$$
+\vspace{0.1cm}
+
+\textbf{Ejemplo numérico:} Una hoja A4 tiene área real de $0{,}0623\ \text{m}^2$.
+Si en la imagen ocupa 48.500 px²:
+$$\text{FactorK} = \frac{0{,}0623}{48500} \approx 1{,}285 \times 10^{-6}\ \frac{\text{m}^2}{\text{px}^2}$$
+\end{formulabox}
+
+\subsection{Flujograma del asistente de calibración (3 pasos)}
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm and 2cm]
+
+  \node[startstop] (s) {Iniciar calibración};
+
+  % PASO 1
+  \node[process, below=0.7cm of s]
+    (p1a) {\textbf{Paso 1:} Capturar frame actual};
+  \node[process, below=of p1a]
+    (p1b) {Congelar imagen de la cámara};
+  \node[io, below=of p1b]
+    (p1c) {Mostrar imagen congelada al usuario};
+
+  % PASO 2
+  \node[process, below=0.7cm of p1c]
+    (p2a) {\textbf{Paso 2:} Seleccionar objeto de referencia};
+  \node[io, below=of p2a]
+    (p2b) {Usuario dibuja rectángulo\\con el ratón};
+  \node[process, below=of p2b]
+    (p2c) {Calcular área del rectángulo en px²\\$A_{px} = \text{ancho} \times \text{alto}$};
+  \node[decision, below=of p2c]
+    (p2d) {$A_{px} \geq 1000\ \text{px}^2$?};
+  \node[io, right=2cm of p2d]
+    (p2err) {Advertencia:\\área muy pequeña};
+
+  % PASO 3
+  \node[process, below=0.7cm of p2d]
+    (p3a) {\textbf{Paso 3:} Ingresar datos reales};
+  \node[io, below=of p3a]
+    (p3b) {Usuario escribe:\\área real (m²) + distancia (cm)};
+  \node[process, below=of p3b]
+    (p3c) {Calcular FactorK base};
+  \node[process, below=of p3c]
+    (p3d) {Validar rango del FactorK\\$[10^{-9},\ 1000]$};
+  \node[decision, below=of p3d]
+    (p3val) {¿FactorK\\válido?};
+  \node[io, right=2cm of p3val]
+    (p3err) {Error de validación};
+  \node[storage, below=0.7cm of p3val]
+    (save) {Guardar en\\calibration.json};
+  \node[startstop, below=of save]
+    (fin) {Calibración completada};
+
+  % Arrows
+  \draw[arrow] (s)--(p1a)--(p1b)--(p1c);
+  \draw[arrow] (p1c)--(p2a)--(p2b)--(p2c)--(p2d);
+  \draw[arrow] (p2d) -- node[left, font=\scriptsize]{Sí} (p3a);
+  \draw[arrow] (p2d) -- node[above, font=\scriptsize]{No} (p2err);
+  \draw[arrow] (p2err) |- (p2b);
+  \draw[arrow] (p3a)--(p3b)--(p3c)--(p3d)--(p3val);
+  \draw[arrow] (p3val) -- node[left, font=\scriptsize]{Sí} (save);
+  \draw[arrow] (p3val) -- node[above, font=\scriptsize]{No} (p3err);
+  \draw[arrow] (p3err) |- (p3b);
+  \draw[arrow] (save)--(fin);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Corrección por distancia}
+
+Si durante la medición el usuario ajusta la distancia cámara-objeto
+(por ejemplo, acerca la cámara), el FactorK se recalcula en tiempo real:
+
+\begin{formulabox}[title=Corrección cuadrática por distancia]
+$$\text{FactorK}_{\text{corregido}} = \text{FactorK}_{\text{base}}
+  \times \left(\frac{d_{\text{calibración}}}{d_{\text{medición}}}\right)^2$$
+
+\textbf{¿Por qué al cuadrado?} Porque el área es bidimensional.
+Si la distancia se duplica, el objeto aparece 2 veces más pequeño en cada dimensión,
+por lo tanto ocupa $2^2 = 4$ veces menos píxeles.
+\end{formulabox}
+
+\vspace{0.3cm}
+
+\textbf{Ejemplo:} Calibración a 80 cm, medición a 100 cm:
+$$\text{FactorK}_{\text{corregido}} = \text{FactorK}_{\text{base}} \times \left(\frac{80}{100}\right)^2 = \text{FactorK}_{\text{base}} \times 0{,}64$$
+
+\subsection{Vigencia y validez de la calibración}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Condición} & \textbf{Umbral} & \textbf{Acción del sistema} \\
+\midrule
+Antigüedad de la calibración & $>$ 30 días & Advertencia al usuario \\
+Diferencia de resolución de cámara & $>$ ±10\% & Advertencia al usuario \\
+FactorK fuera de rango & $<10^{-9}$ o $>1000$ & Error — calibración rechazada \\
+Área de referencia muy pequeña & $<$ 1000 px² & Error — selección rechazada \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{Proceso 3: Pipeline de Procesamiento de Imagen}
+% ============================================================
+
+Este es el corazón del sistema. El \texttt{OpenCVService} procesa cada fotograma
+de la cámara (30 veces por segundo) siguiendo una cadena de transformaciones.
+
+\begin{infobox}[title=¿Qué es OpenCV?]
+\textbf{OpenCV} (Open Computer Vision) es una biblioteca de código abierto
+que contiene cientos de algoritmos para análisis de imágenes. VisiSize la
+usa para convertir colores, detectar bordes y encontrar objetos.
+\end{infobox}
+
+\subsection{Flujograma del pipeline de imagen}
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm]
+
+  \node[io] (frame) {Frame BGR\\ de la cámara};
+
+  \node[process, below=of frame]
+    (gray) {\textbf{Paso 1:} Conversión a escala de grises\\
+            $\text{BGR} \rightarrow \text{GRAY}$};
+
+  \node[process, below=of gray]
+    (blur) {\textbf{Paso 2:} Desenfoque gaussiano\\
+            Kernel $5\times5$, $\sigma=0$};
+
+  \node[process, below=of blur]
+    (thresh) {\textbf{Paso 3:} Umbralización adaptativa\\
+              Bloque: 11, Constante: 2};
+
+  \node[process, below=of thresh]
+    (morph) {\textbf{Paso 4:} Morfología — cierre\\
+             Kernel elíptico $5\times5$};
+
+  \node[process, below=of morph]
+    (contours) {\textbf{Paso 5:} Detección de contornos externos\\
+                \texttt{RETR\_EXTERNAL + CHAIN\_APPROX\_SIMPLE}};
+
+  \node[process, below=of contours]
+    (filter) {\textbf{Paso 6:} Filtrado por área\\
+              $[0{,}1\%,\ 95\%]$ del área total del frame};
+
+  \node[decision, below=of filter]
+    (anyvalid) {¿Hay contornos\\válidos?};
+
+  \node[process, right=2.5cm of anyvalid]
+    (noresult) {Retornar resultado\\vacío (sin objeto)};
+
+  \node[process, below=of anyvalid]
+    (largest) {\textbf{Paso 7:} Seleccionar el contorno\\de mayor área};
+
+  \node[process, below=of largest]
+    (metrics) {\textbf{Paso 8:} Calcular métricas del contorno};
+
+  \node[process, below=of metrics]
+    (overlay) {\textbf{Paso 9:} Dibujar overlay visual\\(contorno + bounding box)};
+
+  \node[io, below=of overlay]
+    (result) {ProcessingResult\\(métricas + imágenes intermedias)};
+
+  \draw[arrow] (frame)--(gray)--(blur)--(thresh)--(morph)--(contours)--(filter)--(anyvalid);
+  \draw[arrow] (anyvalid) -- node[left, font=\scriptsize]{Sí} (largest);
+  \draw[arrow] (anyvalid) -- node[above, font=\scriptsize]{No} (noresult);
+  \draw[arrow] (largest)--(metrics)--(overlay)--(result);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Descripción detallada de cada paso}
+
+\subsubsection{Paso 1 — Conversión a escala de grises}
+
+\begin{notebox}[title={¿Por qué escala de grises?}]
+Las imágenes a color tienen 3 valores por píxel (Rojo, Verde, Azul).
+La escala de grises solo tiene 1 (luminosidad). Procesar en grises es
+3 veces más rápido y los algoritmos de detección de bordes funcionan mejor.
+\end{notebox}
+
+La operación es:
+$$\text{Gris}(x,y) = 0{,}114 \cdot B(x,y) + 0{,}587 \cdot G(x,y) + 0{,}299 \cdot R(x,y)$$
+
+\subsubsection{Paso 2 — Desenfoque gaussiano}
+
+El desenfoque suaviza el ruido de la imagen (granulado de la cámara).
+Sin este paso, el detector de bordes encontraría miles de bordes falsos
+en el ruido.
+
+Se usa un \textbf{filtro gaussiano} con kernel de $5 \times 5$ píxeles.
+La operación convoluciona la imagen con una campana de Gauss:
+$$I'(x,y) = \sum_{u=-2}^{2}\sum_{v=-2}^{2} G(u,v) \cdot I(x+u,\ y+v)$$
+
+\subsubsection{Paso 3 — Umbralización adaptativa}
+
+Convierte la imagen de grises a \textbf{blanco y negro puro} (binaria).
+¿Negro o blanco? Depende de si el píxel es más oscuro que su vecindario local.
+
+\begin{center}
+\begin{tabular}{lp{7cm}}
+\toprule
+\textbf{Parámetro} & \textbf{Significado} \\
+\midrule
+Tipo & \texttt{ADAPTIVE\_THRESH\_GAUSSIAN\_C} \\
+Inversión & \texttt{THRESH\_BINARY\_INV} — el objeto queda en blanco \\
+Tamaño de bloque & 11 — lado del vecindario que define el umbral local \\
+Constante C & 2 — se resta a la media para afinar el umbral \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+La umbralización \textbf{adaptativa} (vs. global) es clave porque maneja
+bien variaciones de iluminación: sombras, gradientes de luz, reflejos.
+
+\subsubsection{Paso 4 — Morfología: operación de cierre}
+
+Un objeto real puede tener pequeños agujeros blancos dentro (brillo, texturas).
+La \textbf{operación de cierre} (dilatación seguida de erosión) rellena esos huecos:
+
+$$\text{Cierre}(I) = \text{Erode}\big(\text{Dilate}(I,\ K),\ K\big)$$
+
+Se usa un kernel elíptico $5 \times 5$, que simula un pincel circular.
+
+\subsubsection{Paso 5 — Detección de contornos externos}
+
+A partir de la imagen binaria limpia, OpenCV traza los \textbf{bordes}
+de todas las regiones blancas. Solo se buscan contornos externos
+(\texttt{RETR\_EXTERNAL}), ignorando agujeros dentro de objetos.
+
+\subsubsection{Paso 6 — Filtrado por área}
+
+No todos los contornos encontrados son el objeto de interés.
+Se descartan los que son demasiado pequeños (ruido) o demasiado grandes
+(fondo completo de la imagen):
+
+$$A_{\min} = 0{,}001 \times W \times H \qquad A_{\max} = 0{,}95 \times W \times H$$
+
+donde $W$ y $H$ son el ancho y alto del frame en píxeles.
+
+\subsubsection{Paso 7 — Selección del contorno más grande}
+
+De todos los contornos válidos que quedaron, se selecciona el de mayor área.
+Este es el objeto principal que el usuario quiere medir.
+
+\subsubsection{Paso 8 — Cálculo de métricas}
+
+Con el contorno seleccionado se calculan cuatro métricas:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lXl}
+\toprule
+\textbf{Métrica} & \textbf{Descripción} & \textbf{Fórmula} \\
+\midrule
+Área (px²) & Número de píxeles que cubre el objeto &
+  $A = \texttt{cv2.contourArea(c)}$ \\[0.3cm]
+Perímetro (px) & Longitud total del borde &
+  $P = \texttt{cv2.arcLength(c)}$ \\[0.3cm]
+Circularidad & Qué tan circular es el objeto (1.0 = círculo perfecto) &
+  $C = \dfrac{4\pi A}{P^2}$ \\[0.4cm]
+Relación de aspecto & Ancho / Alto del bounding box &
+  $R = \dfrac{w_{\text{bbox}}}{h_{\text{bbox}}}$ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsubsection{Paso 9 — Overlay visual}
+
+El resultado se superpone sobre el frame original en tiempo real:
+\begin{itemize}
+  \item Contorno del objeto dibujado con color según la categoría A/B/C/D.
+  \item Rectángulo delimitador (bounding box).
+  \item Texto con el área en m² y la categoría.
+\end{itemize}
+
+% ============================================================
+\section{Proceso 4: Cálculo del Área Real y Clasificación}
+% ============================================================
+
+\subsection{De píxeles a metros cuadrados}
+
+Una vez que el pipeline entrega el área en píxeles, la conversión es directa:
+
+\begin{formulabox}[title=Fórmula central de medición]
+$$\text{Área real}\ (\text{m}^2) = \text{Área}\ (\text{px}^2) \times \text{FactorK}_{\text{corregido}}$$
+
+donde:
+$$\text{FactorK}_{\text{corregido}} = \text{FactorK}_{\text{base}} \times \left(\frac{d_{\text{cal}}}{d_{\text{med}}}\right)^2$$
+\end{formulabox}
+
+\vspace{0.3cm}
+
+\textbf{Ejemplo numérico completo:}
+\begin{itemize}
+  \item FactorK base calibrado a 80 cm: $1{,}285 \times 10^{-6}$ m²/px²
+  \item Distancia de medición actual: 100 cm
+  \item Área detectada: 65.000 px²
+\end{itemize}
+
+$$\text{FactorK}_{\text{corr}} = 1{,}285\times10^{-6} \times \left(\frac{80}{100}\right)^2 = 8{,}224\times10^{-7}\ \frac{\text{m}^2}{\text{px}^2}$$
+$$\text{Área real} = 65000 \times 8{,}224\times10^{-7} \approx 0{,}0535\ \text{m}^2$$
+
+\subsection{Clasificación en zonas de almacenamiento}
+
+El área calculada $A_{\text{m}^2}$ se evalúa primero contra los umbrales
+de rango del sistema. Si la pieza está dentro del rango operable, se le
+asigna una de las cinco zonas (A--E); en caso contrario se marca como
+\textbf{Fuera de Rango} (FdR) \cite{malamas2003, gonzalez2018}.
+
+\subsubsection*{Diagrama de rangos de zona}
+
+\vspace{0.4cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.1cm]
+  % Fuera de rango inferior
+  \fill[catOut] (-2.2,0) rectangle (0,1);
+  % Zonas A--E
+  \fill[catA]   (0,0)    rectangle (2.5,1);
+  \fill[catB]   (2.5,0)  rectangle (5.0,1);
+  \fill[catC]   (5.0,0)  rectangle (7.5,1);
+  \fill[catD]   (7.5,0)  rectangle (10.0,1);
+  \fill[catE]   (10.0,0) rectangle (12.5,1);
+  % Fuera de rango superior
+  \fill[catOut] (12.5,0) rectangle (14.7,1);
+
+  \node[white, font=\tiny\bfseries]       at (-1.1,  0.5) {FdR inf.};
+  \node[white, font=\scriptsize\bfseries] at (1.25,  0.5) {Zona A};
+  \node[white, font=\scriptsize\bfseries] at (3.75,  0.5) {Zona B};
+  \node[white, font=\scriptsize\bfseries] at (6.25,  0.5) {Zona C};
+  \node[white, font=\scriptsize\bfseries] at (8.75,  0.5) {Zona D};
+  \node[white, font=\scriptsize\bfseries] at (11.25, 0.5) {Zona E};
+  \node[white, font=\tiny\bfseries]       at (13.6,  0.5) {FdR sup.};
+
+  \node[font=\tiny] at (-2.2, -0.5) {$<0{,}0025$};
+  \node[font=\tiny] at (-2.2, -0.9) {$\text{m}^2$};
+  \node[font=\tiny] at (0,    -0.5) {$0{,}0025\,\text{m}^2$};
+  \node[font=\tiny] at (2.5,  -0.5) {$1{,}0$};
+  \node[font=\tiny] at (5.0,  -0.5) {$2{,}0$};
+  \node[font=\tiny] at (7.5,  -0.5) {$3{,}0$};
+  \node[font=\tiny] at (10.0, -0.5) {$4{,}0$};
+  \node[font=\tiny] at (10.0, -0.9) {$\text{m}^2$};
+  \node[font=\tiny] at (12.5, -0.5) {$\text{FOV}_{\max}$};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tabular}{p{1.1cm} p{2.5cm} p{3.8cm} p{2.4cm} p{1.8cm}}
+\toprule
+\textbf{Zona} & \textbf{Nombre} & \textbf{Rango de área} & \textbf{Color} & \textbf{Hex} \\
+\midrule
+\textbf{FdR} & Fuera de rango &
+  $A < 0{,}0025\,\text{m}^2$ \textit{ó} excede FOV &
+  \textcolor{catOut}{\rule{1.2cm}{0.25cm}} Rojo & \texttt{\#f44336} \\[3pt]
+\textbf{A} & Primera zona &
+  $[0{,}0025 - 1{,}0)\,\text{m}^2$ &
+  \textcolor{catA}{\rule{1.2cm}{0.25cm}} Verde & \texttt{\#4caf50} \\[3pt]
+\textbf{B} & Segunda zona &
+  $[1{,}0 - 2{,}0)\,\text{m}^2$ &
+  \textcolor{catB}{\rule{1.2cm}{0.25cm}} Azul & \texttt{\#2196f3} \\[3pt]
+\textbf{C} & Tercera zona &
+  $[2{,}0 - 3{,}0)\,\text{m}^2$ &
+  \textcolor{catC}{\rule{1.2cm}{0.25cm}} \'{A}mbar & \texttt{\#ff9800} \\[3pt]
+\textbf{D} & Cuarta zona &
+  $[3{,}0 - 4{,}0)\,\text{m}^2$ &
+  \textcolor{catD}{\rule{1.2cm}{0.25cm}} Naranja & \texttt{\#ff5722} \\[3pt]
+\textbf{E} & Quinta zona &
+  $\geq 4{,}0\,\text{m}^2$ (cabe en frame) &
+  \textcolor{catE}{\rule{1.2cm}{0.25cm}} Morado & \texttt{\#9c27b0} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{notebox}[title={Mapeo con el código fuente --- MeasurementCategory}]
+En el código Python, la enumeración \texttt{MeasurementCategory} define:
+\texttt{A}, \texttt{B}, \texttt{C}, \texttt{D} (equivalentes a las zonas
+homónimas) y \texttt{error} (mapea a Zona~E si la pieza cabe en el frame,
+o a FdR si excede el campo de visión). Esta distinción se formalizará en
+versiones futuras del sistema.
+\end{notebox}
+
+\subsection{Advertencia de borde de zona}
+
+Si el área medida está dentro del $\pm5\,\%$ de un límite entre zonas,
+el sistema emite una advertencia visual indicando que un pequeño error de
+medición podría cambiar la zona de almacenamiento asignada:
+
+$$\text{Advertencia si: } \left|\frac{\text{Área} - L_i}{L_i}\right| \leq 0{,}05$$
+
+donde $L_i \in \{0{,}0025;\; 1{,}0;\; 2{,}0;\; 3{,}0;\; 4{,}0\}$ son los
+límites entre zonas (incluido el umbral FdR/Zona~A inferior).
+
+\begin{notebox}[title={Ejemplo de advertencia}]
+Si se mide un área de $0{,}972\ \text{m}^2$:
+$$\left|\frac{0{,}972 - 1{,}0}{1{,}0}\right| = 0{,}028 < 0{,}05$$
+El sistema indicará: \emph{«El retal está cerca del límite Zona~A / Zona~B.
+Un pequeño error de medición podría cambiar la zona de almacenamiento asignada.»}
+\end{notebox}
+
+% ============================================================
+\section{Proceso 5: Gestión de la Cámara}
+% ============================================================
+
+\subsection{Flujograma de inicialización de cámara}
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm]
+
+  \node[startstop] (s) {Solicitud de inicializar cámara};
+
+  \node[decision, below=0.7cm of s]
+    (tipo) {¿URL de\\cámara IP?};
+
+  \node[process, left=2.5cm of tipo]
+    (webcam) {Abrir \texttt{cv2.VideoCapture(índice)}\\(webcam local)};
+
+  \node[process, right=2.5cm of tipo]
+    (ip) {Validar URL RTSP/HTTP\\Abrir \texttt{cv2.VideoCapture(url)}};
+
+  \node[process, below=1.5cm of tipo]
+    (setres) {Configurar resolución:\\$1280 \times 720$ @ 30 fps};
+
+  \node[decision, below=of setres]
+    (ok) {¿Cámara\\abierta?};
+
+  \node[io, right=2cm of ok]
+    (err) {Lanzar excepción\\con mensaje de error};
+
+  \node[process, below=of ok]
+    (testframe) {Capturar frame de prueba};
+
+  \node[decision, below=of testframe]
+    (frmok) {¿Frame\\válido?};
+
+  \node[startstop, below=of frmok]
+    (listo) {Cámara lista};
+
+  \draw[arrow] (s)--(tipo);
+  \draw[arrow] (tipo) -- node[above, font=\scriptsize]{No} (webcam);
+  \draw[arrow] (tipo) -- node[above, font=\scriptsize]{Sí} (ip);
+  \draw[arrow] (webcam) |- (setres);
+  \draw[arrow] (ip) |- (setres);
+  \draw[arrow] (setres)--(ok);
+  \draw[arrow] (ok) -- node[left, font=\scriptsize]{Sí} (testframe);
+  \draw[arrow] (ok) -- node[above, font=\scriptsize]{No} (err);
+  \draw[arrow] (testframe)--(frmok);
+  \draw[arrow] (frmok) -- node[left, font=\scriptsize]{Sí} (listo);
+  \draw[arrow] (frmok.east) -- ++(1.5,0) |- node[right, font=\scriptsize]{No} (err.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Tipos de fuente de imagen}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Tipo} & \textbf{Formato} & \textbf{Ejemplo} \\
+\midrule
+Webcam local & Índice entero & \texttt{0} (cámara integrada), \texttt{1} (USB) \\
+Cámara IP — RTSP & URL RTSP & \texttt{rtsp://192.168.1.10:554/stream} \\
+Cámara IP — HTTP & URL HTTP & \texttt{http://192.168.1.10:8080/video} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ============================================================
+\section{Proceso 6: Almacenamiento de Datos}
+% ============================================================
+
+\subsection{Base de datos SQLite (\texttt{measurements.db})}
+
+SQLite es una base de datos que vive en un único archivo.
+No requiere servidor, ni instalación especial. Perfecta para
+aplicaciones de escritorio como VisiSize.
+
+\vspace{0.4cm}
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=purple!60, fill=purple!8, rounded corners=6pt,
+        minimum width=12cm, font=\small] (tabla) {
+    \begin{tabular}{llp{6cm}}
+      \toprule
+      \textbf{Campo} & \textbf{Tipo} & \textbf{Descripción} \\
+      \midrule
+      \texttt{id} & INTEGER PK & Identificador autoincrementado \\
+      \texttt{name} & TEXT & Nombre opcional del registro \\
+      \texttt{area\_pixels} & REAL & Área en píxeles cuadrados \\
+      \texttt{area\_m2} & REAL & Área real en m² \\
+      \texttt{category} & TEXT & Categoría A/B/C/D/error \\
+      \texttt{factor\_k\_used} & REAL & FactorK aplicado \\
+      \texttt{distance\_cm} & REAL & Distancia cámara-objeto \\
+      \texttt{timestamp} & TEXT & Fecha y hora de la medición \\
+      \texttt{notes} & TEXT & Notas libres \\
+      \texttt{silhouette\_path} & TEXT & Ruta a imagen PNG \\
+      \texttt{perimeter\_pixels} & REAL & Perímetro en píxeles \\
+      \texttt{circularity} & REAL & Índice de circularidad \\
+      \texttt{confidence} & REAL & Confianza IA (reservado) \\
+      \texttt{is\_valid} & INTEGER & 1 = activa, 0 = inválida \\
+      \bottomrule
+    \end{tabular}
+  };
+\end{tikzpicture}
+\end{center}
+
+\subsection{Guardado de siluetas en \texttt{data/images/}}
+
+Al capturar una medición, la silueta del objeto se guarda como imagen PNG.
+Para ahorrar espacio, la imagen se redimensiona si supera 512 px por lado:
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm]
+  \node[io] (frame) {Frame original con contorno};
+  \node[process, below=of frame] (crop) {Recortar región del bounding box};
+  \node[decision, below=of crop] (size) {¿Lado mayor\\$>$ 512 px?};
+  \node[process, right=2cm of size] (resize) {Redimensionar\\(mantener proporción)};
+  \node[process, below=of size] (save) {Guardar como PNG\\(compresión nivel 6)};
+  \node[storage, below=of save] (disk) {\texttt{data/images/}};
+
+  \draw[arrow] (frame)--(crop)--(size);
+  \draw[arrow] (size) -- node[above, font=\scriptsize]{Sí} (resize);
+  \draw[arrow] (resize) |- (save);
+  \draw[arrow] (size) -- node[left, font=\scriptsize]{No} (save);
+  \draw[arrow] (save)--(disk);
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Proceso 7: Interfaz de Usuario}
+% ============================================================
+
+La UI está construida con \textbf{CustomTkinter}, una versión mejorada de la
+biblioteca estándar de Python para interfaces gráficas, que ofrece un aspecto
+moderno con soporte para tema oscuro y claro.
+
+\subsection{Estructura de la interfaz}
+
+\begin{center}
+\scalebox{0.88}{%
+\begin{tikzpicture}[node distance=0.4cm]
+  \node[draw=visiblu, fill=visiblu!10, rounded corners=6pt,
+        minimum width=12cm, minimum height=0.7cm, font=\small\bfseries]
+        (mw) {MainWindow — Ventana principal};
+
+  \node[draw=blue!50, fill=blue!6, rounded corners=4pt,
+        minimum width=3.6cm, minimum height=4.5cm, font=\small,
+        below left=1.2cm and 4.0cm of mw, align=center, text width=3.2cm]
+        (cam) {\textbf{Pestaña «Cámara»}\\[0.2cm]
+               Feed en tiempo real\\Botón iniciar/detener\\Control de distancia\\Botón «Capturar»\\Resultado actual};
+
+  \node[draw=green!50!black, fill=green!6, rounded corners=4pt,
+        minimum width=3.6cm, minimum height=4.5cm, font=\small,
+        below=1.2cm of mw, align=center, text width=3.2cm]
+        (hist) {\textbf{Pestaña «Historial»}\\[0.2cm]
+                Lista de mediciones\\Detalles por registro\\Imagen de silueta\\Eliminar individual\\Borrar todo};
+
+  \node[draw=purple!50, fill=purple!6, rounded corners=4pt,
+        minimum width=3.6cm, minimum height=4.5cm, font=\small,
+        below right=1.2cm and 4.0cm of mw, align=center, text width=3.2cm]
+        (cfg) {\textbf{Pestaña «Configuración»}\\[0.2cm]
+               Fuente de cámara\\Gestión de calibración\\Ajuste de tema\\Versión de app};
+
+  \draw[arrow] (mw.south) -- (cam.north);
+  \draw[arrow] (mw.south) -- (hist.north);
+  \draw[arrow] (mw.south) -- (cfg.north);
+\end{tikzpicture}}
+\end{center}
+
+\subsection{Flujo de interacción en la pestaña «Cámara»}
+
+\vspace{0.4cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm]
+
+  \node[io] (user) {Usuario abre pestaña «Cámara»};
+  \node[process, below=of user] (btn) {Presiona «Iniciar cámara»};
+  \node[process, below=of btn] (stream) {Hilo de captura activo:\\30 frames/segundo};
+  \node[process, below=of stream] (disp) {Cada frame procesado y\\mostrado en el widget};
+  \node[decision, below=of disp] (adj) {¿Usuario ajusta\\distancia?};
+  \node[process, right=2.5cm of adj] (recalc) {Recalcular FactorK\\corregido};
+  \node[decision, below=of adj] (cap) {¿Usuario presiona\\«Capturar»?};
+  \node[process, below=of cap] (dialog) {Diálogo de confirmación\\(nombre + notas opcionales)};
+  \node[process, below=of dialog] (store) {Guardar en SQLite + PNG};
+  \node[io, below=of store] (ok) {Notificación de éxito\\en la UI};
+
+  \draw[arrow] (user)--(btn)--(stream)--(disp)--(adj);
+  \draw[arrow] (adj) -- node[above, font=\scriptsize]{Sí} (recalc);
+  \draw[arrow] (recalc) |- (disp);
+  \draw[arrow] (adj) -- node[left, font=\scriptsize]{No} (cap);
+  \draw[arrow] (cap) -- node[left, font=\scriptsize]{Sí} (dialog);
+  \draw[arrow] (dialog)--(store)--(ok);
+  \draw[warrow] (cap.east) -- ++(1.2,0) |- node[right, font=\scriptsize]{No} (disp.east);
+
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Proceso 8: Módulo IA — Clasificador YOLO (En desarrollo)}
+% ============================================================
+
+VisiSize incluye la infraestructura para un clasificador basado en
+\textbf{YOLOv8} (You Only Look Once, versión 8), un modelo de visión
+artificial de vanguardia.
+
+\begin{infobox}[title=¿Qué es YOLO?]
+\textbf{YOLO} es un modelo de redes neuronales convolucionales que puede
+identificar y clasificar objetos en una imagen en tiempo real.
+En el contexto de VisiSize, identificaría el \emph{tipo} de objeto
+(lámina, tubo, panel, placa...) no solo su área.
+\end{infobox}
+
+\subsection{Estado actual}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Componente} & \textbf{Estado} \\
+\midrule
+\texttt{classifier\_interface.py} & Interfaz abstracta definida ✓ \\
+\texttt{yolo\_classifier.py} & Esqueleto implementado ✓ \\
+Modelo entrenado (\texttt{.pt}) & Pendiente — en entrenamiento \\
+Integración con medición & Pendiente — se activará sin cambios en la UI \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Flujo futuro del clasificador}
+
+\vspace{0.4cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm]
+  \node[io] (img) {Imagen del objeto detectado};
+  \node[process, below=of img] (yuv) {Pre-procesar imagen\\para YOLOv8};
+  \node[process, below=of yuv] (infer) {Inferencia del modelo YOLOv8\\(\texttt{model.predict()})};
+  \node[process, below=of infer] (parse) {Parsear resultados:\\clase, confianza, bounding box};
+  \node[io, below=of parse] (out) {Tipo de objeto + Confianza (\%)};
+
+  \draw[arrow] (img)--(yuv)--(infer)--(parse)--(out);
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Flujo Completo de una Medición (Resumen Integrado)}
+% ============================================================
+
+Esta sección integra todos los procesos en un único flujograma de alto nivel.
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm and 1.8cm]
+
+  \node[startstop] (start) {Usuario inicia la cámara};
+
+  \node[process, below=of start]
+    (frame) {Capturar frame BGR};
+
+  \node[process, below=of frame]
+    (proc) {Pipeline OpenCV:\\grises → blur → umbral → morfología\\→ contornos → filtrado};
+
+  \node[decision, below=of proc]
+    (det) {¿Objeto\\detectado?};
+
+  \node[io, right=2cm of det]
+    (nodet) {Overlay «sin objeto»\\en la pantalla};
+
+  \node[process, below=of det]
+    (metrics) {Calcular métricas:\\área px², perímetro, circularidad};
+
+  \node[process, below=of metrics]
+    (dist) {Leer distancia actual\\del panel de control};
+
+  \node[process, below=of dist]
+    (fk) {Aplicar corrección de distancia\\al FactorK};
+
+  \node[process, below=of fk]
+    (area) {$\text{Área m}^2 = A_{px} \times \text{FactorK}_{\text{corr}}$};
+
+  \node[decision, diamond, aspect=2, below=0.6cm of area, font=\small]
+    (fdr) {\textbf{?Fuera de}\\\ \textbf{rango?}};
+  \node[io, right=2.0cm of fdr, text width=2.6cm, align=center,
+        font=\small]
+    (fdrout) {Alerta roja:\\ pieza FdR};
+  \node[process, below=0.6cm of fdr]
+    (cat) {Asignar zona: A\,/\,B\,/\,C\,/\,D\,/\,E};
+
+  \node[decision, below=of cat]
+    (bound) {¿Cerca de\\límite ±5\%?};
+
+  \node[io, right=2cm of bound]
+    (warn) {Mostrar advertencia\\de borde de zona};
+
+  \node[process, below=of bound]
+    (show) {Mostrar overlay con resultado\\en tiempo real};
+
+  \node[decision, below=of show]
+    (capbtn) {¿Botón\\«Capturar»?};
+
+  \node[process, below=of capbtn]
+    (confirm) {Diálogo de confirmación};
+
+  \node[process, below=of confirm]
+    (dbsave) {INSERT en measurements.db};
+
+  \node[process, below=of dbsave]
+    (pngsave) {Guardar silueta PNG};
+
+  \node[process, below=of pngsave]
+    (log) {Registrar en app.log};
+
+  \node[startstop, below=of log]
+    (done) {Medición guardada exitosamente};
+
+  % Flechas
+  \draw[arrow] (start)--(frame)--(proc)--(det);
+  \draw[arrow] (det) -- node[left,font=\scriptsize]{Sí} (metrics);
+  \draw[arrow] (det) -- node[above,font=\scriptsize]{No} (nodet);
+  \draw[arrow] (nodet) |- (frame);
+  \draw[arrow] (metrics)--(dist)--(fk)--(area)--(fdr);
+  \draw[arrow] (fdr) -- node[right, font=\scriptsize]{No} (cat);
+  \draw[arrow] (fdr) -- node[above, font=\scriptsize]{S\'{i}} (fdrout);
+  \draw[arrow] (fdrout) |- (frame);
+  \draw[arrow] (cat) -- (bound);
+  \draw[arrow] (bound) -- node[left,font=\scriptsize]{No} (show);
+  \draw[arrow] (bound) -- node[above,font=\scriptsize]{Sí} (warn);
+  \draw[arrow] (warn) |- (show);
+  \draw[arrow] (show)--(capbtn);
+  \draw[arrow] (capbtn) -- node[left,font=\scriptsize]{Sí} (confirm);
+  \draw[arrow] (confirm)--(dbsave)--(pngsave)--(log)--(done);
+  \draw[warrow] (capbtn.east) -- ++(1.5,0) |- node[right,font=\scriptsize]{No} (frame.east);
+
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Estructura de Archivos del Proyecto}
+% ============================================================
+
+\begin{lstlisting}[style=pycode, language=bash, caption=Estructura de directorios del proyecto]
+AreaCamPython_v1/
+|
++-- config.py              # Configuracion global (camara, rutas, tema)
++-- main.py                # Punto de entrada de la aplicacion
++-- requirements.txt       # Dependencias Python
++-- app.log                # Log de actividad (se crea al ejecutar)
+|
++-- core/                  # Nucleo puro: sin I/O ni dependencias de UI
+|   +-- constants.py       # Parametros del pipeline OpenCV y limites de categoria
+|   +-- entities.py        # Estructuras de datos (Medicion, Calibracion, categorias)
+|   +-- formulas.py        # Calculos puros (FactorK, area, categorias, correccion)
+|   +-- exceptions.py      # Excepciones propias del dominio
+|
++-- services/              # Logica de negocio y orquestacion
+|   +-- calibration_service.py  # Gestion del FactorK y archivo JSON
+|   +-- measurement_service.py  # Orquesta el procesamiento de cada frame
+|   +-- camera_service.py       # Conexion con webcam o camara IP
+|   +-- opencv_service.py       # Pipeline OpenCV completo
+|   +-- ai_classifier/
+|       +-- classifier_interface.py  # Contrato abstracto del clasificador
+|       +-- yolo_classifier.py       # Implementacion YOLO (en desarrollo)
+|
++-- data/
+|   +-- calibration.json   # Calibracion activa
+|   +-- measurements.db    # Historial de mediciones (SQLite)
+|   +-- images/            # Siluetas PNG guardadas
+|
++-- ui/
+    +-- app.py             # Bootstrap de la aplicacion
+    +-- theme.py           # Paleta de colores modo oscuro/claro
+    +-- windows/           # Ventanas principales
+    |   +-- main_window.py
+    |   +-- calibration_window.py
+    |   +-- measurement_detail_window.py
+    +-- widgets/           # Componentes reutilizables
+        +-- camera_feed_widget.py
+        +-- area_selector_widget.py
+        +-- measurement_card.py
+\end{lstlisting}
+
+% ============================================================
+\section{Resumen de Fórmulas Matemáticas}
+% ============================================================
+
+\begin{center}
+\renewcommand{\arraystretch}{2.2}
+\begin{longtable}{p{4cm} p{5.5cm} p{4cm}}
+\toprule
+\textbf{Fórmula} & \textbf{Expresión matemática} & \textbf{Uso} \\
+\midrule
+FactorK base &
+  $FK = \dfrac{A_{\text{real}}}{A_{\text{px}}}$ &
+  Calibración \\
+\midrule
+Corrección por distancia &
+  $FK' = FK \times \left(\dfrac{d_{\text{cal}}}{d_{\text{med}}}\right)^2$ &
+  Ajuste en medición \\
+\midrule
+Área real &
+  $A_{\text{m}^2} = A_{\text{px}} \times FK'$ &
+  Conversión central \\
+\midrule
+Circularidad &
+  $C = \dfrac{4\pi A}{P^2}$ &
+  Forma del objeto \\
+\midrule
+Rango mínimo de contorno &
+  $A_{\min} = 0{,}001 \times W \times H$ &
+  Filtrado de ruido \\
+\midrule
+Rango máximo de contorno &
+  $A_{\max} = 0{,}95 \times W \times H$ &
+  Filtrado de fondo \\
+\midrule
+Umbral de borde de categoría &
+  $\left|\dfrac{A - L_i}{L_i}\right| \leq 0{,}05$ &
+  Advertencia al usuario \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+% ============================================================
+\section{Glosario}
+% ============================================================
+
+\begin{description}
+  \item[\textbf{FactorK}] Factor de conversión entre píxeles cuadrados y metros cuadrados.
+        Es el corazón de la calibración y de todas las mediciones.
+  \item[\textbf{Frame}] Un fotograma individual de video. A 30 fps (fotogramas por segundo),
+        el programa procesa 30 imágenes por segundo.
+  \item[\textbf{Bounding box}] El rectángulo más pequeño que contiene completamente al objeto
+        detectado. Se usa para calcular la relación de aspecto y posición.
+  \item[\textbf{Contorno}] La curva cerrada que traza el borde exterior de un objeto en una
+        imagen binaria.
+  \item[\textbf{Umbralización adaptativa}] Proceso de convertir una imagen en escala de grises
+        a blanco y negro, donde el umbral varía según el vecindario local de cada píxel.
+  \item[\textbf{Morfología (cierre)}] Operación matemática sobre imágenes binarias que rellena
+        pequeños huecos interiores sin cambiar el contorno externo del objeto.
+  \item[\textbf{SQLite}] Motor de base de datos ligero que guarda todos los datos en un único
+        archivo \texttt{.db}, sin necesidad de servidor.
+  \item[\textbf{YOLO}] \emph{You Only Look Once} — arquitectura de red neuronal para detección
+        de objetos en tiempo real. Versión 8 (YOLOv8) es la utilizada en este proyecto.
+  \item[\textbf{Pipeline}] Cadena de procesamiento donde la salida de cada paso
+        es la entrada del siguiente.
+  \item[\textbf{Overlay}] Información gráfica superpuesta sobre el video en tiempo real
+        (contornos, texto, colores de categoría).
+  \item[\textbf{OpenCV}] Open Computer Vision Library — biblioteca de visión por computador
+        de código abierto, usada para todas las operaciones de imagen.
+  \item[\textbf{RTSP}] \emph{Real-Time Streaming Protocol} — protocolo para transmisión de video
+        en red, utilizado por cámaras IP.
+  \item[\textbf{Retal metálico}] Fragmento sobrante de metal que resulta
+  de procesos de corte o troquelado en plantas como ServiMetales de Colombia S.A.S.
+  Estos retales son el objeto de medición del sistema VisiSize.
+
+  \item[\textbf{Zona de almacenamiento}] Categoría de destino físico
+  asignada a cada retal según su área. El sistema define cinco zonas (A--E)
+  diferenciadas por color digital, que se integrarán a futuro en el gemelo digital
+  del layout de planta.
+
+  \item[\textbf{Gemelo digital (Digital Twin)}] Representación virtual y
+  dinámica del layout físico de la planta, sincronizada en tiempo real con
+  los datos de producción~\cite{tao2018}. Las zonas A--E del sistema VisiSize
+  corresponden a ubicaciones planificadas dentro de este gemelo.
+
+  \item[\textbf{FOV (Field of View / Campo visual)}] Área máxima visible
+  por la cámara desde la distancia de instalación configurada. Define el límite
+  superior de medición: objetos que excedan el 95\,\% del FOV se clasifican
+  como Fuera de Rango.
+
+  \item[\textbf{FdR (Fuera de Rango)}] Condición que se activa cuando el área
+  calculada es menor que 0{,}0025\,m\textsuperscript{2} (5\,cm\,$\times$\,5\,cm)
+  o cuando el objeto supera el 95\,\% del campo visual de la cámara. En ambos
+  casos el sistema emite una alerta visual en rojo y no asigna zona.
+
+\end{description}
+
+% ============================================================
+\section{Referencias Técnicas}
+
+\renewcommand{\refname}{}
+\begin{thebibliography}{14}
+
+\bibitem{bradski2008}
+G. Bradski and A. Kaehler, \textit{Learning OpenCV: Computer Vision with the OpenCV Library}.
+Sebastopol, CA: O'Reilly Media, 2008.
+
+\bibitem{gonzalez2018}
+R. C. Gonzalez and R. E. Woods, \textit{Digital Image Processing}, 4th\,ed.
+New York, NY: Pearson, 2018.
+
+\bibitem{malamas2003}
+E. N. Malamas, E. G. M. Petrakis, M. Zervakis, L. Petit, and J.-D. Legat,
+``A survey on industrial machine vision systems,''
+\textit{Image Vis. Comput.}, vol.~21, no.~2, pp.~171--188, Feb. 2003.
+
+\bibitem{chin1982}
+R. T. Chin and C. A. Harlow,
+``Automated visual inspection: A survey,''
+\textit{IEEE Trans. Pattern Anal. Mach. Intell.}, vol.~PAMI-4, no.~6,
+pp.~557--573, Nov. 1982.
+
+\bibitem{suzuki1985}
+S. Suzuki and K. Abe,
+``Topological structural analysis of digitized binary images by border following,''
+\textit{Comput. Vis. Graph. Image Process.}, vol.~30, no.~1, pp.~32--46, 1985.
+
+\bibitem{bradley2007}
+D. Bradley and G. Roth,
+``Adapting thresholding using the integral image,''
+\textit{J. Graph. Tools}, vol.~12, no.~2, pp.~13--21, 2007.
+
+\bibitem{haralick1992}
+R. M. Haralick and L. G. Shapiro, \textit{Computer and Robot Vision}, vol.~1.
+Reading, MA: Addison-Wesley, 1992.
+
+\bibitem{redmon2016}
+J. Redmon, S. Divvala, R. Girshick, and A. Farhadi,
+``You only look once: Unified, real-time object detection,''
+in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)},
+Las Vegas, NV, Jun. 2016, pp.~779--788.
+
+\bibitem{jocher2023}
+G. Jocher, A. Chaurasia, and J. Qiu,
+``Ultralytics YOLO,'' version 8.0, 2023. [Online].
+Available: \url{https://github.com/ultralytics/ultralytics}
+
+\bibitem{tao2018}
+F. Tao, J. Cheng, Q. Qi, M. Zhang, H. Zhang, and F. Sui,
+``Digital twin-driven product design, manufacturing and service with big data,''
+\textit{Int. J. Adv. Manuf. Technol.}, vol.~94, no.~9--12,
+pp.~3563--3576, Feb. 2018.
+
+\bibitem{li2020}
+Y. Li, H. Zhao, S. Hu, Q. Wang, and H. Chen,
+``Metal surface defect detection based on improved YOLOv3 neural network,''
+\textit{IEEE Access}, vol.~8, pp.~71864--71875, 2020.
+
+\bibitem{owens2010}
+M. Owens and G. Allen, \textit{The Definitive Guide to SQLite}, 2nd\,ed.
+New York, NY: Apress, 2010.
+
+\bibitem{opencv_docs}
+OpenCV Development Team, ``OpenCV Documentation,'' 2024. [Online].
+Available: \url{https://docs.opencv.org/}
+
+\bibitem{schimansky2023}
+T. Schimansky, ``CustomTkinter Documentation,'' 2023. [Online].
+Available: \url{https://customtkinter.tomschimansky.com/}
+
+\end{thebibliography}
+
+\end{document}

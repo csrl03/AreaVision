@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QApplication
 from config import APP_TITLE, APP_VERSION, DEFAULT_THEME
 from data.database import DatabaseManager
 from data.repositories import MeasurementRepository, ImageStorageService
+from data.settings_repository import SettingsRepository, SENSITIVITY_PARAMS
 from services.camera_service import CameraService
 from services.calibration_service import CalibrationService
 from services.measurement_service import MeasurementService
@@ -36,8 +37,26 @@ def run_app(db: DatabaseManager) -> int:
     theme_manager = ThemeManager()
     theme_manager.apply(app, DEFAULT_THEME)
 
+    # Cargar configuración de usuario
+    from config import DATA_DIR
+    import os
+    settings_repo = SettingsRepository(os.path.join(DATA_DIR, "settings.json"))
+    cfg = settings_repo.load()
+
     # Construir servicios
     opencv_svc      = OpenCVService()
+
+    # Aplicar configuración guardada al servicio de visión
+    sens_params = SENSITIVITY_PARAMS.get(cfg.get("detection_sensitivity", "media"), SENSITIVITY_PARAMS["media"])
+    opencv_svc.update_config(
+        min_pixels=cfg.get("min_contour_area_pixels", 500),
+        adaptive_c=sens_params["adaptive_c"],
+        block_size=sens_params["block_size"],
+    )
+
+    # Aplicar umbrales de categoría guardados
+    from core.formulas import set_category_thresholds
+    set_category_thresholds(cfg["category_thresholds"])
     calibration_svc = CalibrationService()
     repo            = MeasurementRepository(db)
     image_storage   = ImageStorageService()
@@ -55,6 +74,8 @@ def run_app(db: DatabaseManager) -> int:
         measurement_repo=repo,
         theme_manager=theme_manager,
         ai_classifier=ai_classifier,
+        settings_repo=settings_repo,
+        opencv_svc=opencv_svc,
     )
     window.show()
 

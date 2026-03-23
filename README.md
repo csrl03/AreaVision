@@ -6,11 +6,11 @@
 
 ## ¿Cómo funciona en resumen?
 
-1. **Detección** — Cada fotograma pasa por un pipeline OpenCV: escala de grises → desenfoque gaussiano → umbralización adaptativa → morfología → detección de contornos. El contorno más grande se toma como el objeto a medir.
+1. **Detección** — Cada fotograma pasa por un pipeline OpenCV: escala de grises → desenfoque gaussiano → umbralización adaptativa → apertura morfológica (elimina sombras y líneas) → cierre morfológico → detección de contornos. Los contornos se filtran por área mínima absoluta (en px²), ratio relativo al frame y solidez mínima. El contorno más grande restante se toma como el objeto a medir.
 2. **Calibración** — Antes de medir, el usuario fotografía un objeto de área conocida (p. ej. una hoja A4) y dibuja un rectángulo sobre él. El sistema calcula el **FactorK** (m²/px²) que relaciona píxeles con metros cuadrados reales.
 3. **Corrección de distancia** — Si la cámara cambia de altura respecto a la calibración, el FactorK se corrige automáticamente con `FactorK × (d_cal / d_actual)²`.
-4. **Clasificación** — El área resultante se categoriza (A < 1 m², B 1–2 m², C 2–3 m², D 3–4 m²) y se muestra con color en pantalla.
-5. **Persistencia** — Cada medición se guarda en una base de datos SQLite local junto con la silueta PNG del objeto.
+4. **Clasificación** — El área resultante se categoriza (A, B, C, D, fuera de rango) según rangos configurables por el usuario desde la pestaña Configuración. Los cambios se aplican en caliente y persisten entre sesiones.
+5. **Persistencia** — Cada medición se guarda en una base de datos SQLite local junto con la silueta PNG del objeto. La configuración de detección y categorías se guarda en `data/settings.json`.
 
 Aplicación de escritorio para medir áreas de superficies planas (láminas, paneles, tubos)
 usando visión por computador (OpenCV) en tiempo real con cámara.

@@ -22,24 +22,33 @@ Frame de cámara
        ▼
 3. Umbralización         → convierte la imagen a blanco/negro
    adaptativa            (el objeto queda blanco, el fondo negro)
+   (sensibilidad ajustable: Alta / Media / Baja)
        │
        ▼
-4. Morfología (cierre)   → rellena pequeños huecos dentro del objeto
+4. Morfología (apertura) → elimina líneas finas, sombras y ruido
+   MORPH_OPEN            puntual antes de detectar contornos
        │
        ▼
-5. Detección de          → encuentra los bordes del objeto
+5. Morfología (cierre)   → rellena pequeños huecos dentro del objeto
+   MORPH_CLOSE
+       │
+       ▼
+6. Detección de          → encuentra los bordes del objeto
    contornos externos
        │
        ▼
-6. Filtrado              → descarta contornos demasiado pequeños o
-                           demasiado grandes (ruido o fondo completo)
+7. Filtrado              → descarta contornos por tres criterios:
+                           • Área mínima relativa (% del frame)
+                           • Área mínima absoluta en px² (configurable)
+                           • Solidez < 0.40 (descarta sombras/líneas irregulares)
+                           • Área máxima (descarta el fondo completo)
        │
        ▼
-7. Selección del         → el objeto principal = el contorno de mayor área
+8. Selección del         → el objeto principal = el contorno de mayor área
    contorno más grande
        │
        ▼
-8. Cálculo de métricas   → área en píxeles, perímetro, circularidad,
+9. Cálculo de métricas   → área en píxeles, perímetro, circularidad,
                            relación de aspecto (ancho/alto)
 ```
 
@@ -206,6 +215,10 @@ La aplicación tiene tres pestañas principales:
 - Selección de fuente de cámara (webcam por índice o URL de IP).
 - Gestión de calibración: ver calibración actual, crear nueva o eliminarla.
 - Ajuste de tema visual (oscuro / claro).
+- **Detección de contornos** (persistente entre sesiones):
+  - *Área mínima (px²)*: contornos con menos píxeles son ignorados completamente. Útil para descartar piezas muy pequeñas o partículas de ruido.
+  - *Sensibilidad*: Alta / Media / Baja. Controla la agresividad del umbral adaptativo. "Baja" descarta sombras y bordes de pared que no son objetos sólidos.
+- **Rangos de categorías (m²)**: el usuario define el límite superior de cada categoría A, B, C, D. Las clasificaciones se aplican inmediatamente sin reiniciar. Los valores persisten en `data/settings.json`.
 
 ---
 
@@ -261,6 +274,7 @@ AreaCamPython_v1/
 │   └── opencv_service.py       ← Pipeline de procesamiento de imagen
 ├── data/
 │   ├── calibration.json   ← Calibración activa (JSON)
+│   ├── settings.json      ← Configuración del usuario (área mínima, sensibilidad, categorías)
 │   ├── measurements.db    ← Historial de mediciones (SQLite)
 │   └── images/            ← Siluetas PNG guardadas
 └── ui/

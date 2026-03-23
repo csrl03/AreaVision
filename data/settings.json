@@ -1,0 +1,22 @@
+{
+  "min_contour_area_pixels": 500,
+  "detection_sensitivity": "baja",
+  "category_thresholds": {
+    "A": [
+      0.0,
+      1.0
+    ],
+    "B": [
+      1.0,
+      2.0
+    ],
+    "C": [
+      2.0,
+      3.0
+    ],
+    "D": [
+      3.0,
+      4.0
+    ]
+  }
+}

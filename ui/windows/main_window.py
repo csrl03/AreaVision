@@ -11,10 +11,10 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QDoubleSpinBox, QCheckBox, QListWidget,
+    QLabel, QPushButton, QDoubleSpinBox, QSpinBox, QCheckBox, QListWidget,
     QListWidgetItem, QLineEdit, QComboBox, QGroupBox, QStatusBar,
     QMessageBox, QFileDialog, QSplitter, QGridLayout, QApplication,
-    QFrame,
+    QFrame, QScrollArea,
 )
 
 from config import APP_TITLE, APP_VERSION, CAMERA_INDEX, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
@@ -23,10 +23,12 @@ from core.exceptions import (
     CameraError, CameraInitError, CalibrationNotFoundError, VisiSizeError,
 )
 from data.repositories import MeasurementRepository
+from data.settings_repository import SettingsRepository, SENSITIVITY_PARAMS
 from services.ai_classifier import ObjectClassifier
 from services.calibration_service import CalibrationService
 from services.camera_service import CameraService, list_available_webcams
 from services.measurement_service import MeasurementService
+from services.opencv_service import OpenCVService
 from ui.theme import ThemeManager, CATEGORY_COLORS
 from ui.widgets.camera_feed_widget import CameraFeedWidget
 from ui.widgets.measurement_card import MeasurementCard
@@ -45,6 +47,8 @@ class MainWindow(QMainWindow):
         measurement_repo: MeasurementRepository,
         theme_manager: ThemeManager,
         ai_classifier: ObjectClassifier,
+        settings_repo: SettingsRepository,
+        opencv_svc: OpenCVService,
     ) -> None:
         super().__init__()
         self._camera = camera_service
@@ -53,6 +57,8 @@ class MainWindow(QMainWindow):
         self._repo = measurement_repo
         self._theme = theme_manager
         self._classifier = ai_classifier
+        self._settings_repo = settings_repo
+        self._opencv_svc = opencv_svc
         self._current_distance_cm: float = 50.0
 
         self.setWindowTitle(f"{APP_TITLE}  v{APP_VERSION}")
@@ -235,14 +241,31 @@ class MainWindow(QMainWindow):
     # ── Pestaña Configuración ─────────────────────────────────────────────────
 
     def _build_settings_tab(self) -> QWidget:
+        # Contenedor exterior que contiene solo el scroll
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        outer_lay.setSpacing(0)
+
+        # Área de scroll
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        outer_lay.addWidget(scroll)
+
+        # Widget interior que contiene todos los grupos
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
+        scroll.setWidget(tab)
 
         # ── Grupo Cámara ──
         cam_grp = QGroupBox("Fuente de cámara")
         cam_lay = QGridLayout(cam_grp)
+        cam_lay.setVerticalSpacing(10)
+        cam_lay.setHorizontalSpacing(12)
+        cam_lay.setContentsMargins(10, 12, 10, 12)
 
         cam_lay.addWidget(QLabel("Tipo:"), 0, 0)
         self._combo_cam_type = QComboBox()
@@ -272,6 +295,8 @@ class MainWindow(QMainWindow):
         # ── Grupo Apariencia ──
         ui_grp = QGroupBox("Apariencia")
         ui_lay = QHBoxLayout(ui_grp)
+        ui_lay.setContentsMargins(10, 12, 10, 12)
+        ui_lay.setSpacing(12)
         ui_lay.addWidget(QLabel("Tema:"))
         self._combo_theme = QComboBox()
         self._combo_theme.addItems(["Oscuro", "Claro"])
@@ -285,6 +310,8 @@ class MainWindow(QMainWindow):
         # ── Grupo Calibración ──
         cal_grp = QGroupBox("Estado de calibración")
         cal_lay = QVBoxLayout(cal_grp)
+        cal_lay.setContentsMargins(10, 12, 10, 12)
+        cal_lay.setSpacing(10)
         self._lbl_cal_status = QLabel("Cargando…")
         cal_lay.addWidget(self._lbl_cal_status)
         btn_new_cal = QPushButton("Nueva calibración")
@@ -296,6 +323,8 @@ class MainWindow(QMainWindow):
         # ── Grupo IA ──
         ai_grp = QGroupBox("Clasificador IA (Feature Futura)")
         ai_lay = QVBoxLayout(ai_grp)
+        ai_lay.setContentsMargins(10, 12, 10, 12)
+        ai_lay.setSpacing(8)
         ai_status = "Disponible" if self._classifier.is_available() else "Sin modelo cargado"
         ai_lay.addWidget(QLabel(f"Estado: {ai_status}"))
         ai_lay.addWidget(QLabel(f"Modelo: {self._classifier.model_name}"))
@@ -307,8 +336,93 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(ai_grp)
 
+        # ── Grupo Detección de contornos ──────────────────────────────────────
+        det_grp = QGroupBox("Detección de contornos")
+        det_lay = QGridLayout(det_grp)
+        det_lay.setVerticalSpacing(10)
+        det_lay.setHorizontalSpacing(12)
+        det_lay.setContentsMargins(10, 12, 10, 12)
+
+        det_lay.addWidget(QLabel("Área mínima (px²):"), 0, 0)
+        self._spin_min_pixels = QSpinBox()
+        self._spin_min_pixels.setRange(1, 1_000_000)
+        self._spin_min_pixels.setSingleStep(100)
+        self._spin_min_pixels.setToolTip(
+            "Contornos con menos píxeles que este valor son ignorados.\n"
+            "Aumentar para descartar piezas muy pequeñas o ruido."
+        )
+        det_lay.addWidget(self._spin_min_pixels, 0, 1)
+
+        det_lay.addWidget(QLabel("Sensibilidad:"), 1, 0)
+        self._combo_sensitivity = QComboBox()
+        self._combo_sensitivity.addItem("Alta  (más sensible, puede capturar sombras)", "alta")
+        self._combo_sensitivity.addItem("Media  (recomendado)", "media")
+        self._combo_sensitivity.addItem("Baja  (menos sensible, ignora detalles finos)", "baja")
+        self._combo_sensitivity.setToolTip(
+            "Controla cuán agresivo es el algoritmo al detectar bordes.\n"
+            "Usa 'Baja' si se detectan sombras o líneas de la pared."
+        )
+        det_lay.addWidget(self._combo_sensitivity, 1, 1)
+
+        btn_save_det = QPushButton("Aplicar y guardar detección")
+        btn_save_det.clicked.connect(self._on_save_detection_settings)
+        det_lay.addWidget(btn_save_det, 2, 0, 1, 2)
+        layout.addWidget(det_grp)
+
+        # ── Grupo Rangos de categorías ────────────────────────────────────────
+        cat_grp = QGroupBox("Rangos de categorías (m²)")
+        cat_lay = QGridLayout(cat_grp)
+        cat_lay.setVerticalSpacing(10)
+        cat_lay.setHorizontalSpacing(12)
+        cat_lay.setContentsMargins(10, 12, 10, 12)
+        cat_lay.addWidget(
+            QLabel("Cada categoría va de su límite inferior al superior.\n"
+                   "Los límites deben ser estrictamente ascendentes (A < B < C < D)."),
+            0, 0, 1, 2,
+        )
+
+        cat_lay.addWidget(QLabel("Límite superior categoría A (m²):"), 1, 0)
+        self._spin_cat_a = QDoubleSpinBox()
+        self._spin_cat_a.setRange(0.01, 9_999.0)
+        self._spin_cat_a.setDecimals(2)
+        self._spin_cat_a.setSingleStep(0.5)
+        cat_lay.addWidget(self._spin_cat_a, 1, 1)
+
+        cat_lay.addWidget(QLabel("Límite superior categoría B (m²):"), 2, 0)
+        self._spin_cat_b = QDoubleSpinBox()
+        self._spin_cat_b.setRange(0.01, 9_999.0)
+        self._spin_cat_b.setDecimals(2)
+        self._spin_cat_b.setSingleStep(0.5)
+        cat_lay.addWidget(self._spin_cat_b, 2, 1)
+
+        cat_lay.addWidget(QLabel("Límite superior categoría C (m²):"), 3, 0)
+        self._spin_cat_c = QDoubleSpinBox()
+        self._spin_cat_c.setRange(0.01, 9_999.0)
+        self._spin_cat_c.setDecimals(2)
+        self._spin_cat_c.setSingleStep(0.5)
+        cat_lay.addWidget(self._spin_cat_c, 3, 1)
+
+        cat_lay.addWidget(QLabel("Límite superior categoría D (m²):"), 4, 0)
+        self._spin_cat_d = QDoubleSpinBox()
+        self._spin_cat_d.setRange(0.01, 9_999.0)
+        self._spin_cat_d.setDecimals(2)
+        self._spin_cat_d.setSingleStep(0.5)
+        cat_lay.addWidget(self._spin_cat_d, 4, 1)
+
+        cat_lay.addWidget(
+            QLabel("Nota: áreas > D se clasifican como 'Fuera de rango'."), 5, 0, 1, 2
+        )
+
+        btn_save_cat = QPushButton("Aplicar y guardar categorías")
+        btn_save_cat.clicked.connect(self._on_save_category_settings)
+        cat_lay.addWidget(btn_save_cat, 6, 0, 1, 2)
+        layout.addWidget(cat_grp)
+
+        # Poblar controles con los valores actuales guardados
+        self._load_settings_into_ui()
+
         layout.addStretch()
-        return tab
+        return outer
 
     # ─── Slots — Cámara ───────────────────────────────────────────────────────
 
@@ -549,6 +663,106 @@ class MainWindow(QMainWindow):
             self._update_status_bar()
             self._update_calibration_label()
             QMessageBox.information(self, "Calibración guardada", "Calibración guardada correctamente.")
+
+    def _load_settings_into_ui(self) -> None:
+        """Puebla los controles de configuración con los valores guardados en disco."""
+        cfg = self._settings_repo.get()
+
+        # Detección
+        self._spin_min_pixels.setValue(cfg.get("min_contour_area_pixels", 500))
+        sens = cfg.get("detection_sensitivity", "media")
+        for i in range(self._combo_sensitivity.count()):
+            if self._combo_sensitivity.itemData(i) == sens:
+                self._combo_sensitivity.setCurrentIndex(i)
+                break
+
+        # Categorías
+        thresholds = cfg.get("category_thresholds", {})
+        self._spin_cat_a.setValue(thresholds.get("A", [0.0, 1.0])[1])
+        self._spin_cat_b.setValue(thresholds.get("B", [1.0, 2.0])[1])
+        self._spin_cat_c.setValue(thresholds.get("C", [2.0, 3.0])[1])
+        self._spin_cat_d.setValue(thresholds.get("D", [3.0, 4.0])[1])
+
+    def _on_save_detection_settings(self) -> None:
+        """Valida, aplica y guarda la configuración de detección de contornos."""
+        min_px = self._spin_min_pixels.value()
+        sensitivity = self._combo_sensitivity.currentData()
+
+        # QSpinBox garantiza entero ≥ 1 por su rango configurado, pero doble-verificamos
+        if min_px < 1:
+            QMessageBox.warning(self, "Valor inválido", "El área mínima debe ser al menos 1 px².")
+            return
+
+        cfg = dict(self._settings_repo.get())
+        cfg["min_contour_area_pixels"] = min_px
+        cfg["detection_sensitivity"] = sensitivity
+
+        try:
+            self._settings_repo.save(cfg)
+        except OSError as exc:
+            QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar la configuración:\n{exc}")
+            return
+
+        # Aplicar en caliente al pipeline de visión
+        sens_params = SENSITIVITY_PARAMS[sensitivity]
+        self._opencv_svc.update_config(
+            min_pixels=min_px,
+            adaptive_c=sens_params["adaptive_c"],
+            block_size=sens_params["block_size"],
+        )
+        QMessageBox.information(
+            self, "Configuración guardada",
+            f"Detección actualizada:\n"
+            f"  Área mínima: {min_px} px²\n"
+            f"  Sensibilidad: {sensitivity.capitalize()}"
+        )
+
+    def _on_save_category_settings(self) -> None:
+        """Valida, aplica y guarda los rangos de categorías."""
+        a_max = self._spin_cat_a.value()
+        b_max = self._spin_cat_b.value()
+        c_max = self._spin_cat_c.value()
+        d_max = self._spin_cat_d.value()
+
+        # Validación cruzada: límites deben ser estrictamente ascendentes
+        if not (0 < a_max < b_max < c_max < d_max):
+            QMessageBox.warning(
+                self, "Valores inválidos",
+                "Los límites de categorías deben ser estrictamente ascendentes:\n"
+                "  0 < A < B < C < D\n\n"
+                "Corrija los valores e intente nuevamente."
+            )
+            return
+
+        new_thresholds = {
+            "A": [0.0,   a_max],
+            "B": [a_max, b_max],
+            "C": [b_max, c_max],
+            "D": [c_max, d_max],
+        }
+
+        cfg = dict(self._settings_repo.get())
+        cfg["category_thresholds"] = new_thresholds
+
+        try:
+            self._settings_repo.save(cfg)
+        except OSError as exc:
+            QMessageBox.critical(self, "Error al guardar", f"No se pudo guardar la configuración:\n{exc}")
+            return
+
+        # Aplicar en caliente al clasificador
+        from core.formulas import set_category_thresholds
+        set_category_thresholds(new_thresholds)
+
+        QMessageBox.information(
+            self, "Categorías guardadas",
+            f"Rangos actualizados:\n"
+            f"  A: 0 – {a_max:.2f} m²\n"
+            f"  B: {a_max:.2f} – {b_max:.2f} m²\n"
+            f"  C: {b_max:.2f} – {c_max:.2f} m²\n"
+            f"  D: {c_max:.2f} – {d_max:.2f} m²\n"
+            f"  Fuera de rango: > {d_max:.2f} m²"
+        )
 
     # ─── Ciclo de vida ────────────────────────────────────────────────────────
 
