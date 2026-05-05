@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 # ── Valores por defecto ───────────────────────────────────────────────────────
 _DEFAULTS: dict[str, Any] = {
-    "min_contour_area_pixels": 500,
-    "detection_sensitivity": "media",
+    "min_contour_area_pixels": 2000,
+    "detection_sensitivity": "baja",
     "category_thresholds": {
         "A": [0.0, 1.0],
         "B": [1.0, 2.0],
@@ -39,12 +39,13 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 # ── Parámetros OpenCV por nivel de sensibilidad ───────────────────────────────
-# adaptive_c  : constante sustraída a la media; mayor = menos sensible
-# block_size  : vecindario de umbralización; mayor = menos sensible a detalles finos
+# adaptive_c  : constante sustraída a la media; mayor = menos sensible (más C = ignora más detalles)
+# block_size  : vecindario de umbralización; mayor = capta formas globales, ignora texturas finas
 SENSITIVITY_PARAMS: dict[str, dict[str, int]] = {
-    "alta":  {"adaptive_c": 2,  "block_size": 11},
-    "media": {"adaptive_c": 8,  "block_size": 21},
-    "baja":  {"adaptive_c": 14, "block_size": 31},
+    "alta":  {"adaptive_c": 2,  "block_size": 11},   # muy sensible, capta todo
+    "media": {"adaptive_c": 8,  "block_size": 21},   # balance
+    "baja":  {"adaptive_c": 18, "block_size": 41},   # ignora sombras y texturas
+    "macro": {"adaptive_c": 26, "block_size": 61},   # solo formas grandes y sólidas
 }
 
 

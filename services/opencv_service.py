@@ -52,6 +52,7 @@ class OpenCVService:
         self._block_size: int = ADAPTIVE_BLOCK_SIZE
         self._min_pixels: int = MIN_CONTOUR_AREA_PIXELS
         self._solidity_threshold: float = CONTOUR_SOLIDITY_THRESHOLD
+        self._close_kernel_size: int = 11  # Tamaño del kernel MORPH_CLOSE; mayor = une fragmentos más separados
 
     def update_config(
         self,
@@ -59,6 +60,7 @@ class OpenCVService:
         adaptive_c: int | None = None,
         block_size: int | None = None,
         solidity_threshold: float | None = None,
+        close_kernel_size: int | None = None,
     ) -> None:
         """
         Actualiza la configuración de detección en caliente.
@@ -68,6 +70,7 @@ class OpenCVService:
             adaptive_c:         Constante de umbralización adaptativa (mayor → menos sensible).
             block_size:         Tamaño de vecindario adaptativo (debe ser impar, ≥ 3).
             solidity_threshold: Solidez mínima área/convexHull (0–1). Descarta sombras lineales.
+            close_kernel_size:  Tamaño del kernel MORPH_CLOSE (mayor → une más fragmentos).
         """
         if min_pixels is not None:
             self._min_pixels = max(1, int(min_pixels))
@@ -78,9 +81,13 @@ class OpenCVService:
             self._block_size = bs if bs % 2 == 1 else bs + 1  # garantiza impar
         if solidity_threshold is not None:
             self._solidity_threshold = float(solidity_threshold)
+        if close_kernel_size is not None:
+            ck = int(close_kernel_size)
+            self._close_kernel_size = ck if ck % 2 == 1 else ck + 1
         logger.debug(
-            "OpenCVService config actualizada: min_px=%d adaptive_c=%d block=%d solidity=%.2f",
-            self._min_pixels, self._adaptive_c, self._block_size, self._solidity_threshold,
+            "OpenCVService config actualizada: min_px=%d adaptive_c=%d block=%d solidity=%.2f close_k=%d",
+            self._min_pixels, self._adaptive_c, self._block_size,
+            self._solidity_threshold, self._close_kernel_size,
         )
 
     def process_frame(
@@ -134,9 +141,11 @@ class OpenCVService:
             kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
             binary_opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_open)
 
-            # ── 5. MORPH_CLOSE — rellena huecos pequeños dentro del objeto ─────
-            kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            binary_clean = cv2.morphologyEx(binary_opened, cv2.MORPH_CLOSE, kernel_close)
+            # ── 5. MORPH_CLOSE — rellena huecos y une fragmentos del contorno ──
+            # Kernel configurable: mayor tamaño = une fragmentos más separados
+            ck = self._close_kernel_size
+            kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ck, ck))
+            binary_clean = cv2.morphologyEx(binary_opened, cv2.MORPH_CLOSE, kernel_close, iterations=2)
 
             # ── 6. Buscar contornos externos ──────────────────────────────────
             contours, _ = cv2.findContours(

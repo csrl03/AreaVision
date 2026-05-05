@@ -15,8 +15,8 @@ ADAPTIVE_C: int = 2                  # Constante sustraída a la media en umbral
 
 MIN_CONTOUR_AREA_RATIO: float = 0.001  # Contorno mínimo = 0.1% del área total de la imagen
 MAX_CONTOUR_AREA_RATIO: float = 0.95   # Contorno máximo = 95% (evita detectar el fondo completo)
-MIN_CONTOUR_AREA_PIXELS: int = 500     # Área mínima absoluta en px² (ignora piezas diminutas)
-CONTOUR_SOLIDITY_THRESHOLD: float = 0.40  # Solidez mínima área/convexHull — descarta sombras y líneas
+MIN_CONTOUR_AREA_PIXELS: int = 2000    # Área mínima absoluta en px² — sube a 2000 para ignorar fragmentos de sombras
+CONTOUR_SOLIDITY_THRESHOLD: float = 0.60  # Solidez mínima área/convexHull — sube a 0.60 para descartar sombras y detalles internos
 
 # ─── Validación de FactorK ─────────────────────────────────────────────────────
 MIN_FACTOR_K: float = 1e-9     # Límite inferior — calibraciones con objetos de referencia enormes

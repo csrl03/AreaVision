@@ -24,7 +24,7 @@ from core.exceptions import (
 )
 from data.repositories import MeasurementRepository
 from data.settings_repository import SettingsRepository, SENSITIVITY_PARAMS
-from services.ai_classifier import ObjectClassifier
+from services.ai_classifier import ObjectClassifier, GeometryClassifier
 from services.calibration_service import CalibrationService
 from services.camera_service import CameraService, list_available_webcams
 from services.measurement_service import MeasurementService
@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         # Feed de cámara (expansible)
         self._feed = CameraFeedWidget(self._camera, self._measurement_svc)
         self._feed.captured.connect(self._on_frame_captured)
+        self._feed.live_data.connect(self._on_live_update)
         layout.addWidget(self._feed, stretch=3)
 
         # Panel de control derecho
@@ -167,8 +168,8 @@ class MainWindow(QMainWindow):
         self._lbl_pixels.setAlignment(Qt.AlignmentFlag.AlignCenter)
         result_lay.addWidget(self._lbl_pixels)
 
-        # Clasificación IA (placeholder hasta que el modelo esté listo)
-        self._lbl_ai = QLabel("IA: sin modelo cargado")
+        # Clasificación geométrica en vivo
+        self._lbl_ai = QLabel("IA: —")
         self._lbl_ai.setObjectName("label_status")
         self._lbl_ai.setAlignment(Qt.AlignmentFlag.AlignCenter)
         result_lay.addWidget(self._lbl_ai)
@@ -356,11 +357,12 @@ class MainWindow(QMainWindow):
         det_lay.addWidget(QLabel("Sensibilidad:"), 1, 0)
         self._combo_sensitivity = QComboBox()
         self._combo_sensitivity.addItem("Alta  (más sensible, puede capturar sombras)", "alta")
-        self._combo_sensitivity.addItem("Media  (recomendado)", "media")
-        self._combo_sensitivity.addItem("Baja  (menos sensible, ignora detalles finos)", "baja")
+        self._combo_sensitivity.addItem("Media  (balance general)", "media")
+        self._combo_sensitivity.addItem("Baja  (ignora detalles finos y sombras)", "baja")
+        self._combo_sensitivity.addItem("Macro  (solo formas grandes y sólidas — recomendado)", "macro")
         self._combo_sensitivity.setToolTip(
             "Controla cuán agresivo es el algoritmo al detectar bordes.\n"
-            "Usa 'Baja' si se detectan sombras o líneas de la pared."
+            "Usa 'Macro' para láminas y tubos: ignora sombras y texturas internas."
         )
         det_lay.addWidget(self._combo_sensitivity, 1, 1)
 
@@ -465,6 +467,50 @@ class MainWindow(QMainWindow):
     def _on_capture(self) -> None:
         self._feed.capture_current_frame()
 
+    def _on_live_classification(self, frame) -> None:
+        pass  # reemplazado por _on_live_update
+
+    def _on_live_update(
+        self,
+        frame,
+        result,
+        area_m2,
+        category,
+    ) -> None:
+        """Actualiza todos los labels del panel en tiempo real (throttled por CameraFeedWidget)."""
+        # Labels de medición
+        if area_m2 is not None and category is not None:
+            self._lbl_area.setText(f"{area_m2:.4f} m²")
+            cat_color = CATEGORY_COLORS.get(category.value, "#9e9e9e")
+            self._lbl_category.setText(category.label_es)
+            self._lbl_category.setStyleSheet(
+                f"font-size: 16px; font-weight: bold; "
+                f"background-color: {cat_color}; color: white; "
+                f"border-radius: 6px; padding: 4px 10px;"
+            )
+        elif area_m2 is None:
+            self._lbl_area.setText("Sin calibración")
+
+        if result is not None and result.area_pixels:
+            self._lbl_pixels.setText(
+                f"{result.area_pixels:.0f} px²  ·  {result.processing_time_ms:.1f} ms"
+            )
+
+        # Clasificación geométrica — usa métricas del resultado (no reprocesa la imagen)
+        if isinstance(self._classifier, GeometryClassifier) and result is not None:
+            cls_result = self._classifier.classify_from_result(result)
+        elif self._classifier.is_available():
+            cls_result = self._classifier.classify(frame)
+        else:
+            cls_result = None
+
+        if cls_result:
+            self._lbl_ai.setText(
+                f"IA: {cls_result.object_class}  ({cls_result.confidence_pct})"
+            )
+        else:
+            self._lbl_ai.setText("IA: sin contorno")
+
     def _on_frame_captured(
         self,
         frame,
@@ -490,10 +536,18 @@ class MainWindow(QMainWindow):
         if result and result.area_pixels:
             self._lbl_pixels.setText(f"{result.area_pixels:.0f} px²  ·  {result.processing_time_ms:.1f} ms")
 
-        # Clasificación IA (si está disponible)
-        cls_result = self._classifier.classify(frame) if self._classifier.is_available() else None
+        # Clasificación IA al capturar
+        if isinstance(self._classifier, GeometryClassifier) and result is not None:
+            cls_result = self._classifier.classify_from_result(result)
+        elif self._classifier.is_available():
+            cls_result = self._classifier.classify(frame)
+        else:
+            cls_result = None
+
         if cls_result:
             self._lbl_ai.setText(f"IA: {cls_result.object_class} ({cls_result.confidence_pct})")
+        else:
+            self._lbl_ai.setText("IA: sin contorno")
 
         if area_m2 is None:
             QMessageBox.warning(
@@ -705,10 +759,13 @@ class MainWindow(QMainWindow):
 
         # Aplicar en caliente al pipeline de visión
         sens_params = SENSITIVITY_PARAMS[sensitivity]
+        # close_kernel_size escala con block_size para unir fragmentos del contorno
+        close_k = max(11, sens_params["block_size"] // 3 | 1)  # garantiza impar
         self._opencv_svc.update_config(
             min_pixels=min_px,
             adaptive_c=sens_params["adaptive_c"],
             block_size=sens_params["block_size"],
+            close_kernel_size=close_k,
         )
         QMessageBox.information(
             self, "Configuración guardada",

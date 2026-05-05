@@ -16,7 +16,7 @@ from services.camera_service import CameraService
 from services.calibration_service import CalibrationService
 from services.measurement_service import MeasurementService
 from services.opencv_service import OpenCVService
-from services.ai_classifier import YOLOClassifier
+from services.ai_classifier import GeometryClassifier
 from ui.theme import ThemeManager
 
 logger = logging.getLogger(__name__)
@@ -47,11 +47,13 @@ def run_app(db: DatabaseManager) -> int:
     opencv_svc      = OpenCVService()
 
     # Aplicar configuración guardada al servicio de visión
-    sens_params = SENSITIVITY_PARAMS.get(cfg.get("detection_sensitivity", "media"), SENSITIVITY_PARAMS["media"])
+    sens_params = SENSITIVITY_PARAMS.get(cfg.get("detection_sensitivity", "baja"), SENSITIVITY_PARAMS["baja"])
+    close_k = max(11, sens_params["block_size"] // 3 | 1)
     opencv_svc.update_config(
-        min_pixels=cfg.get("min_contour_area_pixels", 500),
+        min_pixels=cfg.get("min_contour_area_pixels", 2000),
         adaptive_c=sens_params["adaptive_c"],
         block_size=sens_params["block_size"],
+        close_kernel_size=close_k,
     )
 
     # Aplicar umbrales de categoría guardados
@@ -62,7 +64,7 @@ def run_app(db: DatabaseManager) -> int:
     image_storage   = ImageStorageService()
     measurement_svc = MeasurementService(opencv_svc, calibration_svc, repo, image_storage)
     camera_svc      = CameraService()
-    ai_classifier   = YOLOClassifier()
+    ai_classifier   = GeometryClassifier()
 
     # Importar aquí para evitar importación circular antes de que los servicios existan
     from ui.windows.main_window import MainWindow

@@ -1,6 +1,6 @@
 {
   "min_contour_area_pixels": 500,
-  "detection_sensitivity": "baja",
+  "detection_sensitivity": "macro",
   "category_thresholds": {
     "A": [
       0.0,

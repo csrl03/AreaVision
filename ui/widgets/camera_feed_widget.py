@@ -97,6 +97,10 @@ class CameraFeedWidget(QLabel):
         captured(np.ndarray, ProcessingResult, float | None, MeasurementCategory | None)
     """
     captured = pyqtSignal(object, object, object, object)
+    # Emitida cada _CLASSIFY_EVERY frames con todos los datos del pipeline
+    live_data = pyqtSignal(object, object, object, object)  # (frame, result, area_m2, category)
+
+    _CLASSIFY_EVERY: int = 10  # ~3 actualizaciones/segundo a 30 fps
 
     def __init__(
         self,
@@ -112,6 +116,7 @@ class CameraFeedWidget(QLabel):
         self._last_area_m2: Optional[float] = None
         self._last_category: Optional[MeasurementCategory] = None
         self._measurement_svc = measurement_svc
+        self._frame_counter: int = 0
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setMinimumSize(480, 360)
@@ -169,6 +174,12 @@ class CameraFeedWidget(QLabel):
         self._last_result = result
         self._last_area_m2 = area_m2
         self._last_category = category
+
+        # Emitir datos del pipeline en vivo (throttled)
+        self._frame_counter += 1
+        if self._frame_counter >= self._CLASSIFY_EVERY:
+            self._frame_counter = 0
+            self.live_data.emit(frame, result, area_m2, category)
 
         # Mostrar imagen con overlay si existe resultado, el frame crudo si no
         display = (
