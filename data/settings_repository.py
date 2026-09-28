@@ -14,11 +14,21 @@ Estructura de settings.json
     "B": [1.0, 2.0],
     "C": [2.0, 3.0],
     "D": [3.0, 4.0]
-  }
+  },
+  "cost_per_m2_sheet": 85000.0,
+  "currency_symbol": "$",
+  "min_reusable_area_m2": 0.25,
+  "max_reusable_area_m2": 0.0,
+  "min_reusable_thickness_mm": 2.0,
+  "min_regularity_score": 0.70,
+  "sharpness_alert_threshold": 0.55,
+  "auto_recycle_sin_ubicacion": false,
+  "dxf_simplify_epsilon_ratio": 0.02
 }
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -36,6 +46,20 @@ _DEFAULTS: dict[str, Any] = {
         "C": [2.0, 3.0],
         "D": [3.0, 4.0],
     },
+    # ── Gestión de retales (añadido en v2) ──
+    # `max_reusable_area_m2 = 0.0` significa "sin máximo", igual que en
+    # ShelfRules: un 0 no es un área válida de retal, así que es un centinela
+    # seguro para "ilimitado".
+    "cost_per_m2_sheet": 85_000.0,
+    "currency_code": "COP",
+    "currency_symbol": "$",
+    "min_reusable_area_m2": 0.25,
+    "max_reusable_area_m2": 0.0,
+    "min_reusable_thickness_mm": 2.0,
+    "min_regularity_score": 0.70,
+    "sharpness_alert_threshold": 0.55,
+    "auto_recycle_sin_ubicacion": False,
+    "dxf_simplify_epsilon_ratio": 0.02,
 }
 
 # ── Parámetros OpenCV por nivel de sensibilidad ───────────────────────────────
@@ -76,8 +100,11 @@ class SettingsRepository:
             try:
                 with open(self._path, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
-                # Merge superficial con defaults para claves nuevas
-                merged: dict[str, Any] = dict(_DEFAULTS)
+                # Merge superficial con defaults para claves nuevas.
+                # `deepcopy` es necesario: un `dict(_DEFAULTS)` comparte los
+                # sub-diccionarios, así que mutarlos contaminaría los defaults
+                # de toda la aplicación.
+                merged: dict[str, Any] = copy.deepcopy(_DEFAULTS)
                 merged.update(loaded)
                 # Merge anidado para category_thresholds
                 if isinstance(loaded.get("category_thresholds"), dict):
@@ -90,9 +117,9 @@ class SettingsRepository:
                 logger.warning(
                     "No se pudo leer settings.json (%s). Usando valores por defecto.", exc
                 )
-                self._data = dict(_DEFAULTS)
+                self._data = copy.deepcopy(_DEFAULTS)
         else:
-            self._data = dict(_DEFAULTS)
+            self._data = copy.deepcopy(_DEFAULTS)
         return self._data
 
     def save(self, data: dict[str, Any]) -> None:
@@ -106,6 +133,7 @@ class SettingsRepository:
         validated = self._validate(data)
         self._data = validated
         try:
+            os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
             with open(self._path, "w", encoding="utf-8") as f:
                 json.dump(validated, f, indent=2, ensure_ascii=False)
             logger.info("Configuración guardada en %s", self._path)
@@ -180,4 +208,65 @@ class SettingsRepository:
             thresholds = dict(_DEFAULTS["category_thresholds"])
 
         out["category_thresholds"] = thresholds
+
+        # ── Gestión de retales ────────────────────────────────────────────────
+        # Cada valor se valida por separado y cae al default en silencio con un
+        # warning, siguiendo la misma política defensiva del resto del archivo.
+        out["cost_per_m2_sheet"] = SettingsRepository._num(
+            data, "cost_per_m2_sheet", _DEFAULTS["cost_per_m2_sheet"], minimum=0.0
+        )
+        out["min_reusable_area_m2"] = SettingsRepository._num(
+            data, "min_reusable_area_m2", _DEFAULTS["min_reusable_area_m2"], minimum=0.0
+        )
+        # El máximo 0 es el centinela "sin límite": se preserva tal cual.
+        out["max_reusable_area_m2"] = SettingsRepository._num(
+            data, "max_reusable_area_m2", _DEFAULTS["max_reusable_area_m2"], minimum=0.0
+        )
+        out["min_reusable_thickness_mm"] = SettingsRepository._num(
+            data, "min_reusable_thickness_mm", _DEFAULTS["min_reusable_thickness_mm"], minimum=0.0
+        )
+        out["min_regularity_score"] = SettingsRepository._num(
+            data, "min_regularity_score", _DEFAULTS["min_regularity_score"],
+            minimum=0.0, maximum=1.0,
+        )
+        out["sharpness_alert_threshold"] = SettingsRepository._num(
+            data, "sharpness_alert_threshold", _DEFAULTS["sharpness_alert_threshold"],
+            minimum=0.0, maximum=1.0,
+        )
+        out["dxf_simplify_epsilon_ratio"] = SettingsRepository._num(
+            data, "dxf_simplify_epsilon_ratio", _DEFAULTS["dxf_simplify_epsilon_ratio"],
+            minimum=0.001, maximum=0.2,
+        )
+
+        symbol = str(data.get("currency_symbol", _DEFAULTS["currency_symbol"])).strip()
+        out["currency_symbol"] = symbol[:4] if symbol else _DEFAULTS["currency_symbol"]
+        out["currency_code"] = str(
+            data.get("currency_code", _DEFAULTS["currency_code"])
+        ).strip().upper()[:6] or _DEFAULTS["currency_code"]
+
+        out["auto_recycle_sin_ubicacion"] = bool(
+            data.get("auto_recycle_sin_ubicacion", _DEFAULTS["auto_recycle_sin_ubicacion"])
+        )
         return out
+
+    @staticmethod
+    def _num(
+        data: dict[str, Any],
+        key: str,
+        default: float,
+        minimum: float | None = None,
+        maximum: float | None = None,
+    ) -> float:
+        """Lee un float acotado. Valores fuera de rango caen al default."""
+        try:
+            value = float(data.get(key, default))
+        except (TypeError, ValueError):
+            logger.warning("Ajuste '%s' no es numérico. Usando %s.", key, default)
+            return float(default)
+        if minimum is not None and value < minimum:
+            logger.warning("Ajuste '%s' = %s < %s. Usando %s.", key, value, minimum, default)
+            return float(default)
+        if maximum is not None and value > maximum:
+            logger.warning("Ajuste '%s' = %s > %s. Usando %s.", key, value, maximum, default)
+            return float(default)
+        return value

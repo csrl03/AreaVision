@@ -15,3 +15,9 @@ Pillow==10.3.0
 
 # Cómputo numérico (requerido por OpenCV y ultralytics)
 numpy==1.26.4
+
+# Exportación CAD (planos DXF de retales y repisas)
+ezdxf==1.4.4
+
+# Pruebas (desarrollo)
+pytest==8.4.2

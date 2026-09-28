@@ -256,6 +256,10 @@ class OpenCVService:
                 grayscale_image=gray_bgr,
                 binary_image=binary_bgr,
                 contours_image=contours_img,
+                # El contorno se expone para que el análisis geométrico, el de
+                # seguridad y la exportación DXF trabajen sobre el MISMO contorno
+                # que el usuario ve, en vez de re-segmentar la imagen.
+                main_contour=largest,
             )
 
         except Exception as exc:

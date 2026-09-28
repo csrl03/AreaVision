@@ -86,9 +86,15 @@ class MeasurementService:
         distance_cm: float,
         name: Optional[str] = None,
         notes: Optional[str] = None,
+        scrap_id: Optional[int] = None,
     ) -> Measurement:
         """
         Guarda una medición con su imagen de silueta en la base de datos.
+
+        Args:
+            scrap_id: Retal del inventario al que pertenece esta medición.
+                      None para mediciones que no son retales (comportamiento
+                      previo, totalmente compatible).
 
         Returns:
             Measurement con el ID asignado por la base de datos.
@@ -124,6 +130,7 @@ class MeasurementService:
             circularity=processing_result.circularity,
             confidence=self._compute_confidence(cal),
             is_valid=True,
+            scrap_id=scrap_id,
         )
         measurement.id = self._repo.save(measurement)
         return measurement

@@ -40,8 +40,8 @@ class MeasurementRepository:
         INSERT INTO measurements
             (name, area_pixels, area_m2, category, factor_k_used, distance_cm,
              timestamp, notes, silhouette_path, perimeter_pixels, circularity,
-             confidence, is_valid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             confidence, is_valid, scrap_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         try:
             with self._db.get_connection() as conn:
@@ -59,6 +59,7 @@ class MeasurementRepository:
                     measurement.circularity,
                     measurement.confidence,
                     int(measurement.is_valid),
+                    measurement.scrap_id,
                 ))
                 conn.commit()
                 new_id: int = cursor.lastrowid
@@ -174,6 +175,10 @@ class MeasurementRepository:
 
     @staticmethod
     def _row_to_entity(row: sqlite3.Row) -> Measurement:
+        # `scrap_id` llegó en la migración v2. Se lee con `.keys()` para que una
+        # fila de una base no migrada (o un SELECT explícito sin esa columna) no
+        # rompa la lectura del historial antiguo.
+        scrap_id = row["scrap_id"] if "scrap_id" in row.keys() else None
         return Measurement(
             id=row["id"],
             name=row["name"],
@@ -189,6 +194,7 @@ class MeasurementRepository:
             circularity=row["circularity"],
             confidence=row["confidence"],
             is_valid=bool(row["is_valid"]),
+            scrap_id=scrap_id,
         )
 
 

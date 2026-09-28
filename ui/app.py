@@ -12,8 +12,16 @@ from config import APP_TITLE, APP_VERSION, DEFAULT_THEME
 from data.database import DatabaseManager
 from data.repositories import MeasurementRepository, ImageStorageService
 from data.settings_repository import SettingsRepository, SENSITIVITY_PARAMS
+from data.storage_repositories import (
+    ScrapRepository,
+    ShelfRepository,
+    StorageAreaRepository,
+)
+from services.allocation_service import AllocationService
+from services.cad_service import CadService
 from services.camera_service import CameraService
 from services.calibration_service import CalibrationService
+from services.classification_service import ClassificationService, ReusePolicy
 from services.measurement_service import MeasurementService
 from services.opencv_service import OpenCVService
 from services.ai_classifier import GeometryClassifier
@@ -66,6 +74,23 @@ def run_app(db: DatabaseManager) -> int:
     camera_svc      = CameraService()
     ai_classifier   = GeometryClassifier()
 
+    # ── Gestión de retales (v2) ─────────────────────────────────────────────
+    # La política se lee de settings.json y se pasa al servicio de
+    # clasificación, de modo que las reglas de negocio viven en un solo sitio
+    # y este archivo solo se ocupa de cablear dependencias.
+    storage_repo  = StorageAreaRepository(db)
+    shelf_repo    = ShelfRepository(db)
+    scrap_repo    = ScrapRepository(db)
+    classification_svc = ClassificationService(ReusePolicy.from_settings(cfg))
+    allocation_svc = AllocationService(
+        shelf_repo,
+        scrap_repo,
+        auto_recycle_sin_ubicacion=cfg.get("auto_recycle_sin_ubicacion", False),
+    )
+    cad_svc = CadService(
+        simplify_ratio=cfg.get("dxf_simplify_epsilon_ratio", 0.02)
+    )
+
     # Importar aquí para evitar importación circular antes de que los servicios existan
     from ui.windows.main_window import MainWindow
 
@@ -78,6 +103,12 @@ def run_app(db: DatabaseManager) -> int:
         ai_classifier=ai_classifier,
         settings_repo=settings_repo,
         opencv_svc=opencv_svc,
+        storage_repo=storage_repo,
+        shelf_repo=shelf_repo,
+        scrap_repo=scrap_repo,
+        classification_service=classification_svc,
+        allocation_service=allocation_svc,
+        cad_service=cad_svc,
     )
     window.show()
 

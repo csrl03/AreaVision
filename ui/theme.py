@@ -16,6 +16,24 @@ CATEGORY_COLORS: dict[str, str] = {
     "error": "#f44336",
 }
 
+# ─── Colores de gestión de retales ───────────────────────────────────────────
+# REUTILIZABLE / RECICLABLE coinciden con ScrapDestination.hex_color para que la
+# lista de retales y el badge del diálogo hablen el mismo idioma visual.
+DESTINATION_COLORS: dict[str, str] = {
+    "REUTILIZABLE": "#4caf50",
+    "RECICLABLE":   "#f44336",
+}
+
+# Semáforo de ocupación de repisa (verde / ámbar / rojo).
+OCCUPANCY_COLORS: dict[str, str] = {
+    "low":  "#4caf50",
+    "mid":  "#ff9800",
+    "high": "#f44336",
+}
+
+# Alerta de riesgo geométrico.
+SAFETY_ALERT_COLOR: str = "#ff9800"
+
 # ─── Tema oscuro ──────────────────────────────────────────────────────────────
 DARK_QSS = """
 /* Base */
@@ -107,6 +125,16 @@ QCheckBox::indicator:checked { background: #e94560; border-color: #e94560; }
 
 /* ToolTip */
 QToolTip { background: #0f3460; color: #e8e8f0; border: 1px solid #e94560; padding: 4px; }
+
+/* Árbol del almacén */
+QTreeWidget { background: #16213e; border: 1px solid #0f3460; border-radius: 6px; }
+QTreeWidget::item:selected, QTreeWidget::item:selected:active { background: #e94560; color: #fff; }
+QTreeWidget::item:hover { background: #0f3460; }
+QTreeView::branch { background: transparent; }
+
+/* Barra de ocupación */
+QProgressBar { background: #16213e; border: 1px solid #0f3460; border-radius: 5px; height: 18px; text-align: center; color: #e8e8f0; }
+QProgressBar::chunk { background: #2196f3; border-radius: 4px; }
 """
 
 # ─── Tema claro ───────────────────────────────────────────────────────────────
@@ -172,6 +200,14 @@ QLabel#label_area   { font-size: 30px; font-weight: bold; color: #1a1a2e; }
 QLabel#label_cat    { font-size: 18px; font-weight: bold; border-radius: 8px; padding: 4px 14px; }
 QLabel#label_status { font-size: 12px; color: #607080; }
 QLabel#label_title  { font-size: 15px; font-weight: bold; color: #1565c0; }
+
+QTreeWidget { background: #ffffff; border: 1px solid #c0c8d8; border-radius: 6px; }
+QTreeWidget::item:selected, QTreeWidget::item:selected:active { background: #1565c0; color: #fff; }
+QTreeWidget::item:hover { background: #e3f2fd; }
+QTreeView::branch { background: transparent; }
+
+QProgressBar { background: #e0e6ed; border: 1px solid #b0bec5; border-radius: 5px; height: 18px; text-align: center; color: #1a1a2e; }
+QProgressBar::chunk { background: #1565c0; border-radius: 4px; }
 
 QStatusBar          { background: #dce3ec; color: #2a2a4a; border-top: 1px solid #b0bec5; }
 QStatusBar::item    { border: none; }

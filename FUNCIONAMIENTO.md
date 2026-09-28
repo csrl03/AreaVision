@@ -4,6 +4,11 @@
 
 **VisiSize** es una aplicación de escritorio que mide el **área real** (en m²) de objetos físicos usando la imagen de una cámara. El usuario apunta la cámara al objeto, el programa lo detecta automáticamente, calcula su área y la clasifica en una categoría.
 
+Sobre esa base, VisiSize gestiona un **almacén de retales metálicos**: clasifica la geometría de cada pieza, decide si se reutiliza o se recicla, le asigna automáticamente una repisa, valora el material y exporta planos CAD.
+
+> **Alcance del dominio**: láminas metálicas planas. El sistema **no** intenta detectar si un objeto es metálico —una cámara monocular no puede hacerlo de forma fiable—; simplemente el dominio de aplicación está definido así.
+> **Alcance de la medición**: objetos planos vistos desde arriba. No se resuelven objetos volumétricos, tubos ni tuberías.
+
 ---
 
 ## 1. Modelo de detección de área y forma (pipeline de imagen)
@@ -196,7 +201,7 @@ Toda la actividad del programa (errores, calibraciones, mediciones) queda regist
 
 ## 6. Interfaz de usuario
 
-La aplicación tiene tres pestañas principales:
+La aplicación tiene cinco pestañas principales:
 
 ### Pestaña "Cámara"
 - Visualización en tiempo real del feed de cámara con el contorno detectado dibujado sobre el objeto.
@@ -211,6 +216,23 @@ La aplicación tiene tres pestañas principales:
 - Acceso a los detalles de cada medición y su imagen de silueta.
 - Opción de eliminar registros individuales o borrar todo el historial.
 
+### Pestaña "Almacén" (versión 2)
+- Árbol de **Estantes → Repisas**, con alta, edición y baja de ambos.
+- Panel de la repisa seleccionada: dimensiones, capacidad, ocupación y espacio
+  libre por área, y la lista de retales que contiene.
+- Editor de **reglas de aceptación** por repisa.
+- Exportación del plano DXF de la repisa (en metros).
+
+### Pestaña "Inventario" (versión 2)
+- Listado de todos los retales con destino, valor y alerta de riesgo.
+- Filtro por destino (reutilizable / reciclaje) y búsqueda por nombre.
+- Ficha completa de cada retal, con cambio de estado y exportación DXF
+  (desde la silueta real o desde el rectángulo de sus dimensiones).
+- **Buscador de reutilización**: se introducen las dimensiones de la pieza que
+  se quiere fabricar y el sistema lista los retales que la cubren.
+- Resumen: total de retales, m² por destino, valor acumulado, alertas y
+  retales sin ubicación.
+
 ### Pestaña "Configuración"
 - Selección de fuente de cámara (webcam por índice o URL de IP).
 - Gestión de calibración: ver calibración actual, crear nueva o eliminarla.
@@ -219,6 +241,10 @@ La aplicación tiene tres pestañas principales:
   - *Área mínima (px²)*: contornos con menos píxeles son ignorados completamente. Útil para descartar piezas muy pequeñas o partículas de ruido.
   - *Sensibilidad*: Alta / Media / Baja. Controla la agresividad del umbral adaptativo. "Baja" descarta sombras y bordes de pared que no son objetos sólidos.
 - **Rangos de categorías (m²)**: el usuario define el límite superior de cada categoría A, B, C, D. Las clasificaciones se aplican inmediatamente sin reiniciar. Los valores persisten en `data/settings.json`.
+- **Gestión de retales (versión 2)**: costo por m², símbolo de moneda, área
+  mínima y máxima reutilizables, espesor mínimo, regularidad mínima, umbral de
+  alerta de riesgo, tolerancia de simplificación del DXF y la política para los
+  retales que no encuentran ubicación.
 
 ---
 
@@ -251,33 +277,333 @@ Sistema aplica FactorK (con corrección de distancia) → calcula área m²
 Asigna categoría A/B/C/D → muestra resultado con color
         │
         ▼
-Usuario confirma → registro guardado en SQLite + imagen PNG opcional
+Abre el diálogo "Revisar retal" (sección 10)
+        │
+        ▼
+Usuario confirma → retal + medición guardados en SQLite + imagen PNG
 ```
 
 ---
 
-## 9. Archivos y carpetas clave
+## 10. Gestión de retales (añadido en la versión 2)
+
+A partir de aquí, todo lo anterior sigue igual. Lo que sigue se apoya en el
+mismo pipeline y el mismo FactorK; no lo sustituye.
+
+### 10.1 Flujo completo
+
+```
+Capturar
+   ↓  pipeline OpenCV (sin cambios)
+Detectar objeto
+   ↓  área calibrada en m²
+Calcular área
+   ↓  minAreaRect → dimensiones reales
+Clasificar geometría
+   ↓  core/geometry.py
+Determinar regularidad
+   ↓  solidez + suavidad + muesca
+Evaluar espesor            ← entrada MANUAL del usuario
+   ↓
+Evaluar riesgo punzante    ← core/safety.py
+   ↓
+Evaluar reutilización      ← services/classification_service.py
+        ├── NO  → RECICLABLE (+ lista de motivos)
+        └── SÍ  → Buscar ubicaciones compatibles
+                     ↓  reglas de cada repisa
+                  Comprobar espacio físico
+                     ↓  core/packing.py (packing 2D + rotación 90°)
+                  Asignar repisa
+   ↓
+Registrar → Inventario → Valor estimado → Exportar DXF
+```
+
+### 10.2 Dimensiones reales, no solo el área
+
+El área por sí sola no basta. `core/geometry.py` calcula además el
+**rectángulo mínimo rotado** (`cv2.minAreaRect`), que da el largo y el ancho
+reales de la pieza.
+
+> Por qué no `cv2.boundingRect`: devuelve el rectángulo alineado a los ejes. Una
+> pieza de 1.20 × 0.40 m girada 45° reportaría aspecto ≈1.0 en lugar de ≈3.0, y
+> toda la clasificación se desviaría. Es el fallo documentado en
+> `GestionErrores/opencv-oversensitive-macro-shapes.md` (Sol-2).
+
+### 10.3 Clasificación geométrica
+
+Ninguna métrica decide sola. Se combinan cinco evidencias:
+
+| Evidencia | Para qué sirve |
+|---|---|
+| `approxPolyDP` con ε = 2 % del perímetro | Nº de vértices de la polilínea simplificada |
+| `cv2.minAreaRect` | Dimensiones reales |
+| solidez = área / área del hull | Separa polígonos simples de formas cóncavas |
+| circularidad = 4πA/P² | Distingue disco de polígono |
+| déficit de área de la simplificación | **Separa círculo de hexágono** (ver abajo) |
+
+| Resultado | Etiqueta |
+|---|---|
+| circular ≥ 0.84 + hull limpio + déficit ≥ 0.05 | `circulo` |
+| 4 vértices, sólido, aspecto ≈ 1 | `cuadrado` |
+| 4 vértices, sólido ≥ 0.90 | `rectangulo` |
+| 3 vértices, sólido ≥ 0.80 | `triangulo` |
+| 5–8 vértices, sólido, lados parecidos | `poligono_regular` |
+| resto | `poligono_irregular` / `otra` |
+
+**El detalle del círculo.** Un círculo digitalizado de 100 px tiene circularidad
+0.893 (la escalera de píxeles infla el perímetro) y un hexágono regular del mismo
+radio tiene 0.824. Los rangos se solapan, así que la circularidad sola no basta.
+El discriminante fiable es el **déficit de área**: un polígono regular se puede
+representar con exactamente sus n vértices, así que `approxPolyDP` lo reproduce
+sin perder nada (déficit ≈ 0.003), mientras que un círculo no tiene un número
+finito de vértices y cualquier polilínea inscrita queda dentro (déficit ≈ 0.094).
+La diferencia es de un orden de magnitud.
+
+Cada clasificación devuelve un `confidence` heurístico. **No es una certeza**: es
+cuán respaldada está la etiqueta por las métricas.
+
+### 10.4 Regularidad
+
+La regularidad responde a *"¿esto es un corte limpio de máquina o un borde
+rasgado?"*, **no** a *"¿es simétrico?"*.
+
+> Por qué: un rectángulo tiene lados `[L, W, L, W]`, así que su coeficiente de
+> variación de lados es `|L−W|/(L+W)` — 0.25 para un 2:1 y 0.50 para un 3:1.
+> Cualquier medida de simetría marcaría como irregular un rectángulo
+> perfectamente limpio, y en un almacén de recortes eso es un falso negativo
+> constante.
+
+```
+regularidad = 0.40·solidez + 0.35·suavidez + 0.25·(1 − muesca)
+```
+
+La **suavidez** usa el número de vértices como proxy: `approxPolyDP` colapsa un
+corte limpio en 3–8 vértices, pero necesita 17–40 para seguir el dentado de una
+rotura de chapa. La **muesca** usa la profundidad del defecto de convexidad
+*relativa al tamaño de la pieza*, no el número de defectos: un círculo
+digitalizado produce 2–3 defectos de 1 px que no deben penalizarlo.
+
+`REGULAR` ≥ 0.92 · `IRREGULAR` ≤ 0.75 · `SEMI_REGULAR` en medio.
+
+### 10.5 Detección de geometrías potencialmente punzantes
+
+> ⚠ **Esto NO certifica seguridad industrial.** Solo genera una alerta de riesgo
+> potencial a partir de la silueta observada. La ausencia de alerta no significa
+> que la pieza sea segura.
+
+Un umbral único del tipo `if ángulo < 30°: peligro` produce demasiados falsos
+positivos: una lámina rectangular vista en perspectiva puede reportar 30–40° de
+error sin tener ninguna punta, y un triángulo normal tiene un vértice a 60°.
+
+Por eso el `sharpness_score` combina **cinco señales normalizadas**:
+
+| Señal | Peso | Qué detecta |
+|---|---|---|
+| Ángulo interno mínimo | 0.30 | Vértices agudos |
+| Profundidad de protrusión (`1 − hull/area`) | 0.25 | Puntas sobresaliendo del cuerpo |
+| Factor de espina | 0.20 | Salientes estrechas y lengüetas |
+| Defecto de convexidad | 0.15 | Muescas profundas |
+| Relación de aspecto local (p90/min) | 0.10 | Astillas y dientes finos |
+
+El resultado se compara con un **umbral configurable** (por defecto 0.55):
+
+```
+cuadrado 0.11   rectángulo 0.08   círculo 0.28   triángulo 0.23
+L-shape  0.52   muesca 0.59 ⚠      estrella 0.65 ⚠    sierra 0.70 ⚠
+```
+
+### 10.6 Almacén: estantes y repisas
+
+El usuario define la estructura; el sistema nunca la presupone.
+
+```
+Almacén
+├── Estante 1
+│   ├── Repisa 1   2.00 × 1.20 m   [reglas de aceptación]
+│   └── Repisa 2
+└── Estante 2
+    └── Repisa 1
+```
+
+Cada repisa tiene dimensiones y reglas configurables: admite formas regulares
+y/o irregulares, y rangos de ancho, largo, área y espesor. **Dejar un límite en 0
+significa "sin límite"** en ese extremo.
+
+### 10.7 Asignación: por qué no basta el área
+
+Este es el punto donde un sistema ingenuo falla:
+
+```
+Repisa = 2.00 × 1.00 m
+Retal A = 1.00 × 1.50 m   (1.50 m²)
+Retal B = 0.20 × 7.50 m   (1.50 m²)
+```
+
+Ambos tienen menos área que la repisa, pero **ninguno de los dos cabe**. Un
+filtro por área aceptaría los dos. Por eso `core/packing.py` exige una posición
+real libre.
+
+**Algoritmo employed — "shelf-first" determinista:**
+
+1. Filtro barato: ¿cabe en alguna de las dos orientaciones?
+2. Reglas de la repisa (forma, dimensiones, área, espesor).
+3. Barrido de estanterías horizontales: se agrupan los rectángulos ya colocados
+   por su Y, y se busca la primera estantería con hueco.
+4. Si no cabe, segunda pasada "best-fit" sobre todos los bordes X/Y.
+5. Entre repisas válidas gana la que deja **más** área libre (agrupa piezas
+   parecidas en vez de dispersarlas).
+
+Garantías del algoritmo:
+
+- **Determinista** — el mismo inventario produce siempre la misma posición.
+- **Conservador** — si devuelve «no cabe», es que de verdad no halló hueco.
+- **Sin solapamientos** — cada pieza se ancla en un hueco verificado libre.
+- **Sustituible** — la UI nunca lo llama directamente; todo pasa por
+  `AllocationService`, de modo que reemplazarlo por MaxRects o por un
+  optimizador real solo requiere tocar `core/packing.py`.
+
+> **No es un bin packing óptimo.** Resolverlo es NP-difícil. Esta heurística es
+> conservadora y documentada, y su arquitectura permite mejorarla.
+
+Cuando no encuentra hueco, el sistema lo dice explícitamente:
+`No se encontró una ubicación física compatible.` + el detalle de por qué se
+descartó cada repisa.
+
+### 10.8 Reutilizable vs. reciclaje
+
+Un retal va a **RECICLAJE** si:
+
+- el área es menor al mínimo reutilizable;
+- el área es mayor al máximo reutilizable (si está configurado);
+- el espesor es menor al mínimo;
+- la regularidad es menor al mínimo;
+- o, si el usuario lo activó, no cabe en ninguna repisa.
+
+La interfaz siempre muestra **por qué**:
+
+```
+Destino: RECICLAJE
+Motivos:
+· Espesor inferior al mínimo (0.5 < 2.0 mm).
+· Forma demasiado irregular (regularidad 0.39 < 0.70).
+```
+
+**Todos los umbrales son configurables** desde Configuración → Gestión de
+retales. No hay ningún valor de negocio escrito en el código.
+
+> Si la regularidad es *desconocida* (no se pudo analizar el contorno), el retal
+> **no** se manda a reciclaje: «no lo sé» no es «es irregular».
+
+### 10.9 Espesor
+
+Una cámara monocular **no puede medir el espesor**. En esta versión es **entrada
+manual** en el diálogo de revisión.
+
+La arquitectura ya está preparada para sustituirlo:
+
+```
+Entrada manual ──→  espesor_mm
+                        │
+                        ▼
+             (futuro) sensor / visión
+```
+
+`espesor_mm` es un campo `NULL`-able en la base de datos y un parámetro
+independiente del pipeline, así que cambiar la fuente no toca nada más.
+
+### 10.10 Valor económico
+
+```
+valor_estimado = area_m2 × costo_por_m2_lamina
+```
+
+Con `costo_por_m2_lamina = 85.000` y un retal de 1.40 m² → `$ 119.000`.
+
+> **No se asume ningún precio para el reciclaje.** Si el negocio necesita
+> valorar el chatarra, se añade `precio_reciclaje` como campo independiente,
+> nunca como un factor oculto sobre el mismo número.
+
+### 10.11 Exportación DXF
+
+```
+Contorno OpenCV
+     ↓  approxPolyDP (ε configurable = % del perímetro)
+Polilínea de pocos vértices
+     ↓  escala px → mm
+Geometría en milímetros
+     ↓
+DXF
+```
+
+- Si la geometría se reconoce como un disco limpio, escribe un **CIRCLE**
+  nativo; en caso contrario, una **LWPOLYLINE** cerrada.
+- El criterio es **exactamente el mismo** que usa la clasificación, para que lo
+  que se ve en pantalla como «Círculo» sea lo que se abre en AutoCAD.
+- Se exportan a **milímetros**; los planos de repisa, a **metros**.
+- Los nombres de archivo se generan del id y del timestamp, **nunca** del texto
+  del usuario (defensa contra path traversal).
+
+> **Por qué DXF y no DWG:** DWG es un formato binario propietario y no hay
+> librería Python fiable y libre para escribirlo. DXF es el estándar de
+> intercambio que leen AutoCAD, BricsCAD, LibreCAD, QCAD y Fusion.
+
+> **Por qué la simplificación es obligatoria:** una máscara de 1280×720 produce
+> miles de puntos. Volcarlos tal cual genera un archivo de varios MB que tarda
+> segundos en abrir, reproduce cada artefacto de la segmentación como si fuera
+> geometría real y es inútil como plano de corte.
+
+### 10.12 Inventario y búsqueda de reutilización
+
+Cada retal reutilizable guarda: dimensiones, área, espesor, forma, regularidad,
+confianza, vértices, ubicación, fecha, silueta, `sharpness_score`, estado y
+valor estimado.
+
+El buscador responde a la pregunta operativa:
+
+> *Necesito fabricar una pieza de 1.10 × 0.80 m, ¿qué retales tengo?*
+
+Filtra por ancho, largo, área, espesor y forma, evaluando **ambas rotaciones**:
+un retal de 1.00 × 0.40 m sirve para pedir 0.50 × 0.90 m girado.
+
+---
+
+## 11. Archivos y carpetas clave
 
 ```
 AreaCamPython_v1/
 ├── config.py              ← Configuración global (cámara, rutas, tema)
 ├── main.py                ← Punto de entrada de la aplicación
+├── pytest.ini             ← Configuración de las pruebas
 ├── app.log                ← Log de actividad (se crea al ejecutar)
 ├── core/
 │   ├── formulas.py        ← Cálculos matemáticos (FactorK, área, categorías)
-│   ├── entities.py        ← Estructuras de datos (Medición, Calibración)
-│   └── constants.py       ← Parámetros del pipeline y límites de categoría
+│   ├── entities.py        ← Estructuras de datos (Medición, Calibración, Retal, Repisa)
+│   ├── constants.py       ← Parámetros del pipeline y límites de categoría
+│   ├── geometry.py        ← Clasificación geométrica y dimensiones reales
+│   ├── safety.py          ← Detección de geometrías punzantes
+│   ├── packing.py         ← Packing 2D con rotación de 90°
+│   ├── scoring.py         ← Valoración económica
+│   └── dxf.py             ← Generación de planos DXF
 ├── services/
-│   ├── calibration_service.py  ← Lógica de calibración y corrección
-│   ├── measurement_service.py  ← Orquesta el procesamiento de cada frame
-│   ├── camera_service.py       ← Conexión con webcam o cámara IP
-│   └── opencv_service.py       ← Pipeline de procesamiento de imagen
+│   ├── calibration_service.py     ← Lógica de calibración y corrección
+│   ├── measurement_service.py     ← Orquesta el procesamiento de cada frame
+│   ├── camera_service.py          ← Conexión con webcam o cámara IP
+│   ├── opencv_service.py          ← Pipeline de procesamiento de imagen
+│   ├── classification_service.py  ← Reutilización vs. reciclaje
+│   ├── allocation_service.py      ← Asignación automática de repisa
+│   └── cad_service.py             ← Fachada de exportación DXF
 ├── data/
-│   ├── calibration.json   ← Calibración activa (JSON)
-│   ├── settings.json      ← Configuración del usuario (área mínima, sensibilidad, categorías)
-│   ├── measurements.db    ← Historial de mediciones (SQLite)
-│   └── images/            ← Siluetas PNG guardadas
+│   ├── database.py          ← Esquema SQLite y migraciones
+│   ├── repositories.py      ← CRUD de mediciones e imágenes
+│   ├── storage_repositories.py ← CRUD de estantes, repisas y retales
+│   ├── settings_repository.py  ← Preferencias del usuario
+│   ├── calibration.json     ← Calibración activa (JSON)
+│   ├── settings.json        ← Configuración del usuario
+│   ├── measurements.db      ← Historial, almacén e inventario (SQLite)
+│   ├── images/              ← Siluetas PNG
+│   └── dxf/                 ← Planos DXF exportados
+├── tests/                   ← Suite de pruebas (pytest)
 └── ui/
-    ├── windows/           ← Ventanas principales y diálogos
-    └── widgets/           ← Componentes reutilizables (feed, selector de área)
+    ├── windows/             ← Ventanas, pestañas y diálogos
+    └── widgets/             ← Componentes reutilizables
 ```
